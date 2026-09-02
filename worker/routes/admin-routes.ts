@@ -56,17 +56,32 @@ const tagSchema = idsSchema.extend({
   tag: z.string().trim().min(1).max(80),
 });
 
-const moderationSchema = z.object({
-  status: z
-    .string()
-    .refine(
-      (value) =>
-        (MODERATION_STATUSES as readonly string[]).includes(value) ||
-        (SUBMISSION_STATUSES as readonly string[]).includes(value),
-      'סטטוס לא מוכר',
-    ),
-  adminNote: z.string().max(2_000).optional(),
-});
+/**
+ * The moderation patch, per inbox.
+ *
+ * There was one schema, accepting the *union* of both status lists. That is
+ * strictly wider than any of the four tables allows: `video_reports`,
+ * `video_feedback` and `contact_threads` have
+ * `CHECK (status IN ('new','reviewing','waiting','resolved','closed'))`, while
+ * `video_submissions` has `('new','reviewing','approved','rejected','duplicate')`.
+ *
+ * So marking a report `approved`, or a submission `waiting`, passed validation
+ * and was rejected by SQLite — which the repository layer turns into a 503
+ * "the database is unavailable". A moderator pressing a button the interface
+ * offered them got an outage message, and the logs recorded a database error
+ * rather than a bad request. Each inbox now validates against the statuses its
+ * own table actually permits, so the wrong value is a 400 naming the field.
+ */
+export const moderationSchemas = {
+  video_reports: z.object({
+    status: z.enum(MODERATION_STATUSES),
+    adminNote: z.string().max(2_000).optional(),
+  }),
+  video_submissions: z.object({
+    status: z.enum(SUBMISSION_STATUSES),
+    adminNote: z.string().max(2_000).optional(),
+  }),
+} as const;
 
 // ---------------------------------------------------------------- Handlers
 
@@ -126,10 +141,21 @@ async function listVideos(context: RequestContext): Promise<Response> {
  */
 async function reindex(context: RequestContext, ids: readonly string[]): Promise<void> {
   await context.repositories.searchIndex.reindex(ids);
+}
 
-  // Drop the cached copies of the videos that changed. Best effort and
-  // colo-local — see `purgeVideo` — but it is what makes an editor's own
-  // "did that work?" check immediate instead of a five-minute wait.
+/**
+ * Drop the cached copies of the videos that changed.
+ *
+ * Best effort and colo-local — see `purgeVideo` — but it is what makes an
+ * editor's own "did that work?" check immediate instead of a five-minute wait.
+ *
+ * Separate from `reindex` because the two are needed in different cases. A
+ * change to `isFeatured` or `isHebrew` is not indexed and moves no counter, but
+ * it is visible on the page, so it must still evict the cache; skipping the
+ * purge along with the reindex would leave the editor looking at their old
+ * value and reasonably concluding the save had failed.
+ */
+function purge(context: RequestContext, ids: readonly string[]): void {
   context.waitUntil(Promise.all(ids.map((id) => purgeVideo(id, context.env.CACHE_VERSION ?? '1'))));
 }
 
@@ -149,6 +175,42 @@ function refreshCounters(context: RequestContext): void {
   context.waitUntil(context.repositories.counters.refreshAll());
 }
 
+/**
+ * Which follow-up work a patch actually needs.
+ *
+ * Both jobs used to run after every admin write, whatever the write was. An
+ * editor fixing a typo in `adminNote` — a field no visitor ever sees, that is
+ * in neither the search index nor any counter — triggered a full reindex of
+ * the selection and a full counter pass.
+ *
+ * The index holds title, description, channel, tags and vehicle names; the
+ * counters are per-category, per-channel and per-tag totals of *published*
+ * videos. So:
+ *
+ * | field         | reindex | counters |
+ * | ------------- | :-----: | :------: |
+ * | `title`       |    ✓    |          |
+ * | `description` |    ✓    |          |
+ * | `status`      |         |    ✓     |
+ * | `categoryId`  |         |    ✓     |
+ * | `isFeatured`  |         |          |
+ * | `isHebrew`    |         |          |
+ * | `adminNote`   |         |          |
+ *
+ * `isFeatured` moves no counter — `catalog_counters` has no featured total —
+ * and neither flag is indexed. A tag or delete operation is not a patch and
+ * always needs both; only this table is field-dependent.
+ */
+function workFor(fields: z.infer<typeof videoPatchSchema>): {
+  reindex: boolean;
+  counters: boolean;
+} {
+  return {
+    reindex: fields.title != null || fields.description != null,
+    counters: fields.status != null || fields.categoryId != null,
+  };
+}
+
 /** `PATCH /api/admin/videos/:id`. */
 async function updateVideo(
   context: RequestContext,
@@ -162,8 +224,10 @@ async function updateVideo(
   const updated = await admin(context).updateVideo(id, body, identity.userId);
   if (!updated) throw new NotFoundError('הסרטון לא נמצא');
 
-  await reindex(context, [id]);
-  refreshCounters(context);
+  const work = workFor(body);
+  if (work.reindex) await reindex(context, [id]);
+  if (work.counters) refreshCounters(context);
+  purge(context, [id]);
   return ok({ id, updated: true });
 }
 
@@ -173,8 +237,11 @@ async function bulkUpdate(context: RequestContext): Promise<Response> {
   const body = parseOrThrow(bulkSchema, await context.readJson());
 
   const changed = await admin(context).bulkUpdate(body.ids, body.patch, identity.userId);
-  await reindex(context, body.ids);
-  refreshCounters(context);
+
+  const work = workFor(body.patch);
+  if (work.reindex) await reindex(context, body.ids);
+  if (work.counters) refreshCounters(context);
+  purge(context, body.ids);
   return ok({ changed });
 }
 
@@ -188,8 +255,10 @@ async function bulkTags(context: RequestContext): Promise<Response> {
     ? await admin(context).removeTag(body.ids, body.tag, identity.userId)
     : await admin(context).addTag(body.ids, body.tag, identity.userId);
 
+  // A tag change is indexed and counted, always.
   await reindex(context, body.ids);
   refreshCounters(context);
+  purge(context, body.ids);
   return ok({ changed });
 }
 
@@ -203,8 +272,10 @@ async function deleteVideos(context: RequestContext): Promise<Response> {
     ? await admin(context).restore(body.ids, identity.userId)
     : await admin(context).softDelete(body.ids, identity.userId);
 
+  // Removing a video must take it out of the index, not merely out of listings.
   await reindex(context, body.ids);
   refreshCounters(context);
+  purge(context, body.ids);
   return ok({ changed, restored: restore });
 }
 
@@ -258,7 +329,11 @@ async function updateInboxItem(
   const id = params.id;
   if (id == null) throw new BadRequestError('מזהה חסר');
 
-  const body = parseOrThrow(moderationSchema, await context.readJson());
+  // `submissions` is the one inbox with its own status vocabulary; the other
+  // three share the moderation one, exactly as their CHECK constraints do.
+  const schema =
+    name === 'submissions' ? moderationSchemas.video_submissions : moderationSchemas.video_reports;
+  const body = parseOrThrow(schema, await context.readJson());
   const updated = await context.repositories.engagement.updateStatus(
     INBOXES[name],
     id,
@@ -436,8 +511,15 @@ const BYTES_PER_ROW: Readonly<Record<string, number>> = {
   favorites: 70,
   sessions: 200,
   rate_limits: 60,
+  import_jobs: 250,
   import_job_errors: 300,
   maintenance_runs: 80,
+  // Query text twice — raw and normalised — plus five integers and a date.
+  search_query_daily: 150,
+  // A date, a table name and a count.
+  table_growth_samples: 60,
+  // A date and four integers. Empty in practice; see migration 0005.
+  usage_daily: 60,
 };
 
 /**

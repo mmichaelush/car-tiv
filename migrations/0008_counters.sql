@@ -12,7 +12,7 @@
 --
 -- The fix is the standard one: stop counting at read time. Every number that a
 -- visitor sees but only an editor can change becomes a stored column, refreshed
--- by `worker/services/counters-service.ts` — after an import, after an admin
+-- by `worker/repositories/counters-repository.ts` — after an import, after an admin
 -- write, and hourly from the cron as a safety net. Reads become a bounded index
 -- scan of a few dozen rows.
 --
@@ -71,7 +71,7 @@ CREATE INDEX idx_category_tag_counts_popular
 --
 -- Keyed rather than a fixed-column singleton so a new counter is a new key
 -- instead of a new migration. Keys in use are listed in
--- `worker/services/counters-service.ts`; an unknown key reads as 0, which is
+-- `worker/repositories/counters-repository.ts`; an unknown key reads as 0, which is
 -- why every consumer treats a missing counter as "not computed yet" and not as
 -- "the catalog is empty".
 -- ---------------------------------------------------------------------------

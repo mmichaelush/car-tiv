@@ -17,6 +17,59 @@ import { ServiceUnavailableError } from '../lib/errors.js';
 export type Binding = string | number | null;
 
 /**
+ * D1's hard ceiling on bound parameters in one statement.
+ *
+ * Not a guideline. A statement with 101 parameters fails with "too many SQL
+ * variables", and every list-shaped write in this folder — a link-check batch
+ * of 200 ids, a bulk admin edit of 500 — was over it. Nothing caught that,
+ * because `node:sqlite` (which the tests run on) allows 32,766; the test
+ * adapter now enforces this number so the suite can see the difference.
+ *
+ * @see https://developers.cloudflare.com/d1/platform/limits/
+ */
+export const MAX_BOUND_PARAMETERS = 100;
+
+/**
+ * The list size this folder actually uses, with room for the fixed parameters
+ * a statement carries alongside its id list (a `LIMIT`, a threshold, a date).
+ * Twenty spare slots is more than any statement here needs.
+ */
+export const BINDING_CHUNK = 80;
+
+/**
+ * Split a list so each chunk fits inside one statement's binding budget.
+ *
+ * `perItem` is how many parameters each element contributes: 1 for an
+ * `id IN (…)` list, 7 for a multi-row `INSERT` whose rows have seven columns.
+ * `fixed` is the number of parameters the statement binds regardless of the
+ * list length.
+ *
+ * Chunking is the whole answer to the 100-parameter limit, and it is preferred
+ * over the alternative — one statement per id — because that trades a binding
+ * problem for a query-count one: D1's free plan also caps queries per Worker
+ * invocation at 50, so 200 single-id statements is just a different way to
+ * fail. One set-based statement per chunk stays inside both.
+ */
+export function chunkForBindings<T>(
+  items: readonly T[],
+  { perItem = 1, fixed = 0 }: { perItem?: number; fixed?: number } = {},
+): T[][] {
+  const budget = Math.max(1, Math.floor((MAX_BOUND_PARAMETERS - fixed) / perItem));
+  const size = Math.min(budget, Math.max(1, Math.floor(BINDING_CHUNK / perItem)));
+
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+}
+
+/** `?, ?, ?` for a list of `count` values. */
+export function placeholders(count: number): string {
+  return new Array(count).fill('?').join(', ');
+}
+
+/**
  * A WHERE clause under construction.
  *
  * Conditions and their bindings are appended together, which makes it

@@ -177,6 +177,12 @@ export const TYPICAL_VISIT_REQUESTS =
 export const RETENTION = {
   /** Anonymous search log. Feeds the "what content is missing" report. */
   searchLogs: { days: 90, maxRows: 200_000 },
+  /**
+   * The daily rollup of that log. Kept far longer than the raw rows it
+   * summarises — that is the point of a rollup — but still bounded: one row per
+   * distinct query per day is small, and unbounded is not a size.
+   */
+  searchQueryDaily: { days: 400, maxRows: 100_000 },
   /** Admin audit trail. Long, because it is the record of who changed what. */
   auditLog: { days: 365, maxRows: 100_000 },
   /** Watch history rows nobody has touched in a year. */

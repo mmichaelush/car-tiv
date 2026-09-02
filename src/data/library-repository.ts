@@ -68,7 +68,13 @@ export interface LibraryMirror {
   createPlaylist(localId: string, name: string, description: string): void;
   renamePlaylist(localId: string, name: string, description: string): void;
   deletePlaylist(localId: string): void;
-  saveSearch(name: string, query: string): void;
+  /**
+   * `localId` is passed so the caller can record the server's id against it.
+   * Without it the account layer had nothing to key the mapping on, and a
+   * later delete fell back to sending the local UUID — an id the server has
+   * never seen.
+   */
+  saveSearch(localId: string, name: string, query: string): void;
   deleteSearch(id: string, name: string): void;
   addToPlaylist(localId: string, videoId: string): void;
   removeFromPlaylist(localId: string, videoId: string): void;
@@ -89,8 +95,49 @@ function read(): LibraryData {
   return { ...EMPTY, ...store.read() };
 }
 
+/**
+ * Told when the browser refuses to store the library.
+ *
+ * `LocalStore.write` returns `false` when storage refuses — a full quota, or
+ * Safari's private mode, where `localStorage` exists and throws on every
+ * `setItem`. That return value was discarded here, so the interface showed a
+ * filled-in heart, the listeners fired, the card moved, and none of it survived
+ * a reload. A visitor building a watch-later list in private mode lost the lot
+ * with no indication anything was wrong.
+ *
+ * Injected rather than imported, like `LibraryMirror` above, because nothing in
+ * `src/data/` imports from `src/ui/` — a repository that reached for a toast
+ * would be a repository that cannot be tested without a DOM.
+ */
+export type StorageFailureReporter = () => void;
+
+let reportStorageFailure: StorageFailureReporter | null = null;
+
+/** Install (or remove, with `null`) the handler for a refused write. */
+export function setStorageFailureReporter(next: StorageFailureReporter | null): void {
+  reportStorageFailure = next;
+}
+
+/**
+ * Consecutive refused writes.
+ *
+ * The visitor is told once, not once per click: someone adding six videos in a
+ * row should see one explanation, not six. Reset by the first write that
+ * succeeds, so a genuinely transient failure never nags.
+ */
+let failedWrites = 0;
+
 function write(data: LibraryData): void {
-  store.write(data);
+  if (store.write(data)) {
+    failedWrites = 0;
+  } else {
+    failedWrites += 1;
+    if (failedWrites === 1) reportStorageFailure?.();
+  }
+
+  // The listeners run either way. The in-memory value is still what the visitor
+  // asked for, and an interface that ignored its own click would be a second
+  // bug on top of the storage one.
   for (const listener of listeners) listener();
 }
 
@@ -364,7 +411,7 @@ export class LocalLibraryRepository {
     ].slice(0, 50);
 
     write(data);
-    mirror?.saveSearch(trimmed, query);
+    mirror?.saveSearch(saved.id, trimmed, query);
     return Promise.resolve(saved);
   }
 

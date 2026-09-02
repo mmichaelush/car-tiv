@@ -14,6 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { MAX_BOUND_PARAMETERS } from '@worker/repositories/base.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -49,6 +50,19 @@ class TestPreparedStatement {
   }
 
   bind(...values: unknown[]): TestPreparedStatement {
+    // D1 rejects a statement with more than 100 bound parameters. `node:sqlite`
+    // allows 32,766, which is precisely why this went unnoticed: the cron's
+    // `markAttempted` bound 200 ids, passed every test, and would have thrown
+    // on the first real run. Enforcing D1's limit here is what makes the test
+    // suite able to see that class of bug at all.
+    if (values.length > MAX_BOUND_PARAMETERS) {
+      throw new Error(
+        `too many SQL variables: ${String(values.length)} bindings exceeds D1's limit of ` +
+          `${String(MAX_BOUND_PARAMETERS)} — chunk the list with chunkForBindings(). ` +
+          `Statement: ${this.#sql.split('\n')[0] ?? ''}`,
+      );
+    }
+
     const next = new TestPreparedStatement(this.#db, this.#sql, this.#log);
     next.#bindings = values.map(normalizeBinding);
     return next;

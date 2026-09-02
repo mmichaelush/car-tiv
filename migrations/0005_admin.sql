@@ -126,7 +126,9 @@ CREATE INDEX idx_home_sections_order ON home_sections (is_visible, sort_order);
 
 -- ---------------------------------------------------------------------------
 -- Feature flags, so code can ship before a feature is open to everyone.
--- Environment variables win over this table; see worker/services/flags.ts.
+-- NOT READ BY ANY CODE. Feature flags come from environment variables only
+-- (worker/env.ts). This table is created and seeded and nothing consults it;
+-- it pointed at worker/services/flags.ts, which was never written.
 -- ---------------------------------------------------------------------------
 CREATE TABLE feature_flags (
   key          TEXT    PRIMARY KEY,
@@ -138,7 +140,14 @@ CREATE TABLE feature_flags (
 
 -- ---------------------------------------------------------------------------
 -- Daily usage counters, so approaching a Cloudflare free-tier limit is visible
--- before it becomes an outage. Written by the scheduled maintenance job.
+-- before it becomes an outage.
+--
+-- NOT WRITTEN BY ANY CODE. The retention pass deletes from it, so it can only
+-- ever be empty; a Worker cannot read its own request count or D1's row
+-- counters, which is the gap this table was meant to fill and does not.
+-- `table_growth_samples` in migration 0008 is what actually answers the
+-- storage question. Kept rather than dropped because that needs a migration
+-- and the counters are still wanted; see docs/database.md.
 -- ---------------------------------------------------------------------------
 CREATE TABLE usage_daily (
   day             TEXT    PRIMARY KEY,

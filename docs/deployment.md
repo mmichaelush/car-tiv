@@ -49,9 +49,14 @@ curl -X POST https://<host>/api/admin/counters/refresh \
    credentials_ → **OAuth client ID** → _Web application_.
 2. תחת **Authorized redirect URIs** מוסיפים בדיוק את הכתובות האלה — Google
    דורש התאמה מדויקת, כולל הסלאש:
-   - `https://car-tiv-staging.workers.dev/api/auth/google/callback`
-   - `https://car-tiv.workers.dev/api/auth/google/callback`
+   - `https://car-tiv-staging.<ACCOUNT_SUBDOMAIN>.workers.dev/api/auth/google/callback`
+   - `https://car-tiv.<ACCOUNT_SUBDOMAIN>.workers.dev/api/auth/google/callback`
+
+   `<ACCOUNT_SUBDOMAIN>` הוא תת-הדומיין של החשבון ב-Cloudflare — הוא **אינו
+   אופציונלי**, וכתובת בלעדיו לעולם לא תתאים. הכתובת המדויקת היא זו
+   ש-`wrangler deploy` מדפיס, והיא חייבת להיות זהה ל-`APP_URL`.
    - (ולכתובת הסופית של הדומיין, כשעוברים אליו)
+
 3. מעתיקים את ה-Client ID וה-Client secret אל שני הסודות שלמעלה.
 4. מפעילים את הדגל: `FEATURE_ACCOUNTS: "true"` ב-`wrangler.jsonc` לסביבה
    הרלוונטית. ב-production הוא כרגע `false` בכוונה — מפעילים אותו רק אחרי
@@ -150,7 +155,9 @@ Netlify (production)  →  Cloudflare staging  →  בדיקות  →  Cloudflar
 **כשמשנים משהו בקצה:** `CACHE_VERSION` הוא משתנה סביבה שנכנס לכל מפתח מטמון.
 שינוי שלו מבטל את כל המטמון מיידית — בלי purge ובלי deploy.
 
-אם בכל זאת מתקרבים למכסה: `npm run static:build`, ואז `STATIC_CATALOG_MODE=true`.
+**`STATIC_CATALOG_MODE` אינו מחובר** — הדגל קיים ואף קוד לא קורא אותו.
+אם מתקרבים למכסה, מה שכן עובד: להעלות את ה-TTL ב-`CACHE_SECONDS`, ולעבור
+לדומיין מותאם אם עוד לא (ראו הערת ה-workers.dev ב-`docs/performance.md`).
 
 ## החזרה לאחור
 

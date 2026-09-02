@@ -139,8 +139,53 @@ function escapeXml(value: string): string {
     .replace(/'/g, '&apos;');
 }
 
+/**
+ * `GET /robots.txt` — served by the Worker so it can name an absolute sitemap.
+ *
+ * It was a static file with `Sitemap: /sitemap.xml`. The robots.txt standard
+ * requires that value to be a fully-qualified URL; a relative one is not
+ * "mostly works", it is ignored — so nothing the sitemap work bought was ever
+ * discoverable, and the symptom is invisible from the site itself.
+ *
+ * A static file could not fix it without writing a hostname into the
+ * repository, which is the one thing the deployment rules forbid. Here the
+ * origin comes from `appOrigin`, exactly as the sitemap's own URLs do, so
+ * staging advertises staging and production advertises production with no
+ * configuration that can disagree.
+ */
+function robots(context: RequestContext): Response {
+  const origin = appOrigin(context.env, context.url.origin);
+
+  const body = [
+    '# CAR־טיב',
+    '',
+    'User-agent: *',
+    'Allow: /',
+    '',
+    '# The management area and the personal library hold nothing a crawler should',
+    '# index — one is private, the other is per-device and empty without a visitor.',
+    'Disallow: /admin/',
+    'Disallow: /library/',
+    '',
+    '# A filtered listing is the same catalog in a different order; the canonical',
+    '# pages are the category and channel pages, which are linked from the sitemap.',
+    'Disallow: /search?',
+    '',
+    `Sitemap: ${origin}/sitemap.xml`,
+    '',
+  ].join('\n');
+
+  return new Response(body, {
+    headers: {
+      'content-type': 'text/plain; charset=utf-8',
+      'cache-control': CACHE_HEADER,
+    },
+  });
+}
+
 export const sitemapRoutes: RouteDefinition[] = [
   get('/sitemap.xml', sitemapIndex),
   get('/sitemap-pages.xml', sitemapPages),
   get('/sitemap-videos-:page.xml', sitemapVideos),
+  get('/robots.txt', robots),
 ];

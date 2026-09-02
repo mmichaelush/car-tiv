@@ -7,7 +7,7 @@
  */
 
 import type { D1Database } from '@cloudflare/workers-types';
-import { BaseRepository } from './base.js';
+import { BaseRepository, chunkForBindings, placeholders } from './base.js';
 
 /**
  * Consecutive failures before a video is taken out of public listings.
@@ -78,10 +78,16 @@ export class MaintenanceRepository extends BaseRepository {
    */
   async markAttempted(videoIds: readonly string[]): Promise<void> {
     if (videoIds.length === 0) return;
-    const placeholders = videoIds.map(() => '?').join(', ');
-    await this.run(
-      `UPDATE videos SET last_attempted_at = CURRENT_TIMESTAMP WHERE id IN (${placeholders})`,
-      [...videoIds],
+
+    // A link-check run probes 200 videos, so this list was 200 bindings long —
+    // twice D1's limit, on every single cron run. Chunked, it is three
+    // set-based statements.
+    await this.batch(
+      chunkForBindings(videoIds).map((chunk) => ({
+        sql: `UPDATE videos SET last_attempted_at = CURRENT_TIMESTAMP
+              WHERE id IN (${placeholders(chunk.length)})`,
+        bindings: [...chunk],
+      })),
     );
   }
 
@@ -93,8 +99,13 @@ export class MaintenanceRepository extends BaseRepository {
   async markBroken(videoIds: readonly string[]): Promise<void> {
     if (videoIds.length === 0) return;
 
+    // One statement per chunk rather than one per id. The per-id version was
+    // not only 200 statements in a batch — enough to reach D1's 50-queries-per
+    // -invocation limit on the free plan — it also had no reason to be: every
+    // statement was identical apart from the id, so a set-based `IN` does
+    // exactly the same thing in a fraction of the queries.
     await this.batch(
-      videoIds.map((id) => ({
+      chunkForBindings(videoIds, { fixed: 1 }).map((chunk) => ({
         sql: `UPDATE videos
               SET check_failures    = check_failures + 1,
                   last_checked_at   = CURRENT_TIMESTAMP,
@@ -104,8 +115,8 @@ export class MaintenanceRepository extends BaseRepository {
                              THEN 'broken' ELSE status
                            END,
                   updated_at = CURRENT_TIMESTAMP
-              WHERE id = ?`,
-        bindings: [FAILURES_BEFORE_BROKEN, id],
+              WHERE id IN (${placeholders(chunk.length)})`,
+        bindings: [FAILURES_BEFORE_BROKEN, ...chunk],
       })),
     );
   }
@@ -122,21 +133,30 @@ export class MaintenanceRepository extends BaseRepository {
   async markAlive(videoIds: readonly string[]): Promise<number> {
     if (videoIds.length === 0) return 0;
 
-    const placeholders = videoIds.map(() => '?').join(', ');
-    const recovered = await this.count(
-      `SELECT COUNT(*) AS value FROM videos WHERE status = 'broken' AND id IN (${placeholders})`,
-      [...videoIds],
-    );
+    const chunks = chunkForBindings(videoIds);
 
-    await this.run(
-      `UPDATE videos
-       SET check_failures    = 0,
-           last_checked_at   = CURRENT_TIMESTAMP,
-           last_attempted_at = CURRENT_TIMESTAMP,
-           status = CASE WHEN status = 'broken' THEN 'published' ELSE status END,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id IN (${placeholders})`,
-      [...videoIds],
+    let recovered = 0;
+    for (const chunk of chunks) {
+      recovered += await this.count(
+        `SELECT COUNT(*) AS value FROM videos
+         WHERE status = 'broken' AND id IN (${placeholders(chunk.length)})`,
+        [...chunk],
+      );
+    }
+
+    // Counted before the update, and only then written — otherwise the count
+    // would be zero, because the update is what stops them being broken.
+    await this.batch(
+      chunks.map((chunk) => ({
+        sql: `UPDATE videos
+              SET check_failures    = 0,
+                  last_checked_at   = CURRENT_TIMESTAMP,
+                  last_attempted_at = CURRENT_TIMESTAMP,
+                  status = CASE WHEN status = 'broken' THEN 'published' ELSE status END,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE id IN (${placeholders(chunk.length)})`,
+        bindings: [...chunk],
+      })),
     );
 
     return recovered;

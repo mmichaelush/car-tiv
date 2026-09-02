@@ -19,6 +19,8 @@ import {
   BaseRepository,
   ConditionBuilder,
   LIST_SEPARATOR,
+  chunkForBindings,
+  placeholders,
   splitList,
   type Binding,
 } from './base.js';
@@ -280,16 +282,15 @@ export class AdminRepository extends BaseRepository {
     if (assignments.length === 0) return 0;
     assignments.push('updated_at = CURRENT_TIMESTAMP');
 
-    // Chunked so one statement never carries a thousand bindings.
-    for (const chunk of chunks(ids, 50)) {
-      const placeholders = chunk.map(() => '?').join(', ');
-
+    // Chunked so one statement never carries a thousand bindings. The chunk
+    // size accounts for the assignment parameters this statement also binds.
+    for (const chunk of chunkForBindings(ids, { fixed: bindings.length })) {
       // The change and its audit row go in one batch, which D1 runs inside a
       // transaction. Written as two calls, a failure between them left the
       // catalog changed with no record of who changed it.
       const [result] = await this.batchWithResults([
         {
-          sql: `UPDATE videos SET ${assignments.join(', ')} WHERE id IN (${placeholders})`,
+          sql: `UPDATE videos SET ${assignments.join(', ')} WHERE id IN (${placeholders(chunk.length)})`,
           bindings: [...bindings, ...chunk],
         },
         {
@@ -305,49 +306,65 @@ export class AdminRepository extends BaseRepository {
     return changed;
   }
 
-  /** Soft delete. The row stays, so the change is reversible. */
+  /**
+   * Soft delete. The row stays, so the change is reversible.
+   *
+   * Chunked like every other list-shaped write here: the bulk endpoints accept
+   * up to 500 ids, and 500 bindings in one statement is five times what D1
+   * allows. Deleting 500 videos would have failed outright.
+   */
   async softDelete(ids: readonly string[], userId: string | null): Promise<number> {
     if (ids.length === 0) return 0;
-    const placeholders = ids.map(() => '?').join(', ');
+    const batchId = newId();
+    let changed = 0;
 
-    // Change and audit row together; see `batchWithResults`.
-    const [result] = await this.batchWithResults([
-      {
-        sql: `UPDATE videos SET deleted_at = CURRENT_TIMESTAMP, status = 'removed',
-                                updated_at = CURRENT_TIMESTAMP
-              WHERE id IN (${placeholders}) AND deleted_at IS NULL`,
-        bindings: [...ids],
-      },
-      {
-        sql: `INSERT INTO admin_audit_log (user_id, action, entity_type, entity_id, batch_id)
-              VALUES (?, 'video.delete', 'video', ?, ?)`,
-        bindings: [userId, ids.join(','), newId()],
-      },
-    ]);
+    // Change and audit row together; see `batchWithResults`. One audit row per
+    // chunk, sharing a batch id, so the whole operation is still one entry to
+    // the reader of the log.
+    for (const chunk of chunkForBindings(ids)) {
+      const [result] = await this.batchWithResults([
+        {
+          sql: `UPDATE videos SET deleted_at = CURRENT_TIMESTAMP, status = 'removed',
+                                  updated_at = CURRENT_TIMESTAMP
+                WHERE id IN (${placeholders(chunk.length)}) AND deleted_at IS NULL`,
+          bindings: [...chunk],
+        },
+        {
+          sql: `INSERT INTO admin_audit_log (user_id, action, entity_type, entity_id, batch_id)
+                VALUES (?, 'video.delete', 'video', ?, ?)`,
+          bindings: [userId, chunk.join(','), batchId],
+        },
+      ]);
+      changed += result?.meta.changes ?? 0;
+    }
 
-    return result?.meta.changes ?? 0;
+    return changed;
   }
 
   /** Undo a soft delete. */
   async restore(ids: readonly string[], userId: string | null): Promise<number> {
     if (ids.length === 0) return 0;
-    const placeholders = ids.map(() => '?').join(', ');
+    const batchId = newId();
+    let changed = 0;
 
-    const [result] = await this.batchWithResults([
-      {
-        sql: `UPDATE videos SET deleted_at = NULL, status = 'published',
-                                updated_at = CURRENT_TIMESTAMP
-              WHERE id IN (${placeholders})`,
-        bindings: [...ids],
-      },
-      {
-        sql: `INSERT INTO admin_audit_log (user_id, action, entity_type, entity_id, batch_id)
-              VALUES (?, 'video.restore', 'video', ?, ?)`,
-        bindings: [userId, ids.join(','), newId()],
-      },
-    ]);
+    for (const chunk of chunkForBindings(ids)) {
+      const [result] = await this.batchWithResults([
+        {
+          sql: `UPDATE videos SET deleted_at = NULL, status = 'published',
+                                  updated_at = CURRENT_TIMESTAMP
+                WHERE id IN (${placeholders(chunk.length)})`,
+          bindings: [...chunk],
+        },
+        {
+          sql: `INSERT INTO admin_audit_log (user_id, action, entity_type, entity_id, batch_id)
+                VALUES (?, 'video.restore', 'video', ?, ?)`,
+          bindings: [userId, chunk.join(','), batchId],
+        },
+      ]);
+      changed += result?.meta.changes ?? 0;
+    }
 
-    return result?.meta.changes ?? 0;
+    return changed;
   }
 
   /** Add a tag to many videos, creating the tag if it is new. */
@@ -362,7 +379,8 @@ export class AdminRepository extends BaseRepository {
     if (tag == null) return 0;
 
     let added = 0;
-    for (const chunk of chunks(ids, 50)) {
+    // Two bindings a row, so the chunk is half the usual size.
+    for (const chunk of chunkForBindings(ids, { perItem: 2 })) {
       const values = chunk.map(() => '(?, ?)').join(', ');
       const [result] = await this.batchWithResults([
         {
@@ -385,29 +403,33 @@ export class AdminRepository extends BaseRepository {
   /** Remove a tag from many videos. */
   async removeTag(ids: readonly string[], tagSlug: string, userId: string | null): Promise<number> {
     if (ids.length === 0) return 0;
-    const placeholders = ids.map(() => '?').join(', ');
+    let removed = 0;
 
-    const [result] = await this.batchWithResults([
-      {
-        sql: `DELETE FROM video_tags
-              WHERE video_id IN (${placeholders})
+    // `fixed: 1` for the slug this statement also binds.
+    for (const chunk of chunkForBindings(ids, { fixed: 1 })) {
+      const [result] = await this.batchWithResults([
+        {
+          sql: `DELETE FROM video_tags
+              WHERE video_id IN (${placeholders(chunk.length)})
                 AND tag_id = (SELECT id FROM tags WHERE slug = ?)`,
-        // `slugify`, the same function `addTag` and the importer use to create
-        // the slug. This used to be `indexText(...).replace(/\s+/g, '-')`, which
-        // is a *different* normalisation: `indexText` folds final Hebrew letters
-        // for search, so "מצתים" became "מצתימ" and matched no tag that had ever
-        // been stored. Removing a tag ending in ם, ן, ץ, ף or ך — a large share
-        // of Hebrew words — silently did nothing.
-        bindings: [...ids, slugify(tagSlug)],
-      },
-      {
-        sql: `INSERT INTO admin_audit_log (user_id, action, entity_type, entity_id, after_json)
+          // `slugify`, the same function `addTag` and the importer use to create
+          // the slug. This used to be `indexText(...).replace(/\s+/g, '-')`, which
+          // is a *different* normalisation: `indexText` folds final Hebrew letters
+          // for search, so "מצתים" became "מצתימ" and matched no tag that had ever
+          // been stored. Removing a tag ending in ם, ן, ץ, ף or ך — a large share
+          // of Hebrew words — silently did nothing.
+          bindings: [...chunk, slugify(tagSlug)],
+        },
+        {
+          sql: `INSERT INTO admin_audit_log (user_id, action, entity_type, entity_id, after_json)
               VALUES (?, 'video.tag-remove', 'video', ?, ?)`,
-        bindings: [userId, ids.join(','), JSON.stringify({ tag: tagSlug })],
-      },
-    ]);
+          bindings: [userId, chunk.join(','), JSON.stringify({ tag: tagSlug })],
+        },
+      ]);
+      removed += result?.meta.changes ?? 0;
+    }
 
-    return result?.meta.changes ?? 0;
+    return removed;
   }
 
   /** Recent audit entries, for the "what changed" panel. */
@@ -445,10 +467,4 @@ function auditStatement(entry: {
       JSON.stringify(entry.after),
     ],
   };
-}
-
-function* chunks<T>(items: readonly T[], size: number): Generator<T[]> {
-  for (let index = 0; index < items.length; index += size) {
-    yield items.slice(index, index + size);
-  }
 }

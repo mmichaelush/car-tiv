@@ -10,7 +10,6 @@
  * does not need to know which backend it is talking to.
  */
 
-import { PAGINATION } from '@shared/constants.js';
 import { parseQuery, serializeQuery } from '@shared/core/query.js';
 import { isVideoId } from '@shared/core/youtube.js';
 import type { VideoId, VideoSummary } from '@shared/types/catalog.js';
@@ -346,7 +345,15 @@ async function mergeGuestLibrary(context: RequestContext): Promise<Response> {
 
 // --- Helpers ---------------------------------------------------------------
 
-/** Load summaries for a set of ids, in chunks the query planner is happy with. */
+/**
+ * Load summaries for a set of ids.
+ *
+ * The chunking that used to live here now lives in `findManyByIds`, where the
+ * limit it protects against actually is. Slicing by `PAGINATION.maxLimit` kept
+ * the statement under D1's 100-parameter limit only because that constant
+ * happens to be 60 — a page-size setting silently holding a database
+ * constraint together from another file.
+ */
 async function hydrate(
   context: RequestContext,
   ids: ReadonlySet<string>,
@@ -355,11 +362,8 @@ async function hydrate(
   if (ids.size === 0) return summaries;
 
   const list = [...ids].map((id) => id as VideoId);
-  for (let index = 0; index < list.length; index += PAGINATION.maxLimit) {
-    const chunk = list.slice(index, index + PAGINATION.maxLimit);
-    for (const video of await context.repositories.videos.findManyByIds(chunk)) {
-      summaries.set(video.id, video);
-    }
+  for (const video of await context.repositories.videos.findManyByIds(list)) {
+    summaries.set(video.id, video);
   }
   return summaries;
 }

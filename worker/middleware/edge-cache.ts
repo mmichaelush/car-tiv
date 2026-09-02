@@ -100,6 +100,34 @@ function significantParams(path: string): readonly string[] {
 const CANONICAL_QUERY_PATHS = new Set(['/api/videos']);
 
 /**
+ * `include` as a sorted, de-duplicated list.
+ *
+ * The handler treats `include` as a set — it asks "does this contain
+ * `related`?" — so `related,channel` and `channel,related` produce byte-
+ * identical responses. Keyed on the raw string they were two cache entries for
+ * one answer: half the hit rate, two D1 round trips instead of one, and
+ * `purgeVideo` (which builds the key for exactly one spelling) evicting only
+ * one of them, leaving the other to serve an editor's stale video for its
+ * whole TTL.
+ *
+ * Unknown values are kept rather than dropped. They change nothing in the
+ * response today, but a key that silently discards part of its input is how a
+ * future `include=transcript` gets served the answer that has no transcript.
+ */
+function canonicalInclude(value: string): string {
+  return [
+    ...new Set(
+      value
+        .split(',')
+        .map((part) => part.trim())
+        .filter((part) => part.length > 0),
+    ),
+  ]
+    .sort()
+    .join(',');
+}
+
+/**
  * Subtrees that are never cached, whatever their handlers say.
  *
  * `/api/me` and `/api/auth` are per-visitor; `/api/admin` is staff-only, shows
@@ -139,7 +167,8 @@ export function cacheKeyFor(request: Request, url: URL, version: string): string
     const params = new URLSearchParams();
     for (const name of [...significantParams(path)].sort()) {
       const value = url.searchParams.get(name);
-      if (value != null && value.length > 0) params.set(name, value);
+      if (value == null || value.length === 0) continue;
+      params.set(name, name === 'include' ? canonicalInclude(value) : value);
     }
     query = params.toString();
   }

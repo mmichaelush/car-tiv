@@ -81,7 +81,8 @@ async function main(): Promise<void> {
     console.log('ok');
   }
 
-  console.log('Done. Verify with `npm run catalog:verify` or the admin dashboard.');
+  console.log('Done. Refresh the counters next — see docs/deployment.md step 5 —');
+  console.log('then check the admin dashboard.');
 }
 
 function readTarget(): TargetName {

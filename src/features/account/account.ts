@@ -266,9 +266,23 @@ function installMirror(): void {
     reorderPlaylist: (localId, videoIds) =>
       withRemoteId(localId, (id) => quiet(account.reorderPlaylist(id, videoIds))),
 
-    // A saved search is addressed by name on the way up: the server replaces a
-    // same-named entry, so there is no id to translate.
-    saveSearch: (name, query) => quiet(account.saveSearch(name, query)),
+    // A saved search is addressed by name on the way up — the server replaces
+    // a same-named entry — but the id it answers with is what every later
+    // action needs. Discarding it meant `withSavedSearchId` fell through to the
+    // local UUID, so deleting a search created in this session sent an id the
+    // server had never seen: the delete did nothing and the search came back on
+    // the next sync. The response is now recorded against the local id.
+    saveSearch: (localId, name, query) => {
+      void account
+        .saveSearch(name, query)
+        .then((result) => {
+          savedSearchIds.set(localId, result.id);
+          persistSavedSearchIds();
+        })
+        .catch((cause: unknown) => {
+          if (cause instanceof ApiError && cause.status === 401) void refreshSession();
+        });
+    },
 
     // Deleting one needs the server's id, and that used to be looked up in
     // `playlistIds` — the *playlist* map, which saved searches are never added
@@ -312,8 +326,11 @@ function persistSavedSearchIds(): void {
 }
 
 function withSavedSearchId(localId: string, use: (remoteId: string) => void): void {
-  // A saved search created on this device but not yet synced has no server id.
-  // The id is also frequently the same on both sides, so try that too.
+  // The mapping is filled by `fromRemote` on a sync and by `saveSearch` as soon
+  // as the server answers, so it is present for anything the server knows about.
+  // The fallback covers the narrow window where the creation request has not
+  // come back yet: sending the local id is a harmless 404, and the local entry
+  // is removed either way rather than being left behind by a failed lookup.
   const remoteId = savedSearchIds.get(localId) ?? localId;
   use(remoteId);
 }

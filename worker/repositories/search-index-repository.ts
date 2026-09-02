@@ -3,10 +3,12 @@
  *
  * ## Why this file exists
  *
- * `migrations/0001_catalog.sql` says the search index "is therefore maintained
+ * `migrations/0001_catalog.sql` used to say the search index was "maintained
  * explicitly by `worker/services/search-index.ts`, which every write path
  * calls." That file did not exist, and no admin write path called anything like
- * it. So an editor could rename a video, change its description, or add and
+ * it. (The migration now names this file; the sentence is quoted here because
+ * it is the reason this file exists.) So an editor could rename a video, change
+ * its description, or add and
  * remove tags, and the site would show the new text while search kept matching
  * the old — indefinitely, because nothing else ever rewrites the row.
  *
@@ -27,7 +29,10 @@
  */
 
 import { indexText } from '@shared/core/text.js';
-import { BaseRepository, type Binding } from './base.js';
+import { BaseRepository, chunkForBindings, placeholders, type Binding } from './base.js';
+
+/** Columns in one `videos_fts` row — the per-row binding cost of an insert. */
+const INDEX_COLUMNS = 7;
 
 /** The columns of the indexed document, already normalised. */
 interface IndexRow {
@@ -54,8 +59,53 @@ export class SearchIndexRepository extends BaseRepository {
   async reindex(videoIds: readonly string[]): Promise<number> {
     if (videoIds.length === 0) return 0;
 
-    const placeholders = videoIds.map(() => '?').join(', ');
-    const rows = await this.all<IndexRow>(
+    const rows: IndexRow[] = [];
+    for (const chunk of chunkForBindings(videoIds)) {
+      rows.push(...(await this.#read(chunk)));
+    }
+
+    const statements: { sql: string; bindings: Binding[] }[] = [];
+
+    // Every id is cleared, including ones the SELECT did not return — a video
+    // that has been hard-deleted must lose its index row too, or it stays
+    // findable by search forever. One `IN` per chunk, not one `DELETE` per id:
+    // a bulk edit of 500 videos used to produce 500 delete statements and up
+    // to 500 inserts in a single batch, which is both far past D1's
+    // 50-queries-per-invocation limit and needless.
+    for (const chunk of chunkForBindings(videoIds)) {
+      statements.push({
+        sql: `DELETE FROM videos_fts WHERE video_id IN (${placeholders(chunk.length)})`,
+        bindings: [...chunk],
+      });
+    }
+
+    // Seven bindings a row, so fourteen rows fit inside a statement's budget.
+    for (const group of chunkForBindings(rows, { perItem: INDEX_COLUMNS })) {
+      statements.push({
+        sql: `INSERT INTO videos_fts
+                (video_id, title, manufacturers, models, tags, description, channel)
+              VALUES ${group.map(() => `(${placeholders(INDEX_COLUMNS)})`).join(', ')}`,
+        bindings: group.flatMap((row) => [
+          row.videoId,
+          indexText(row.title),
+          indexText(row.manufacturers.replaceAll(',', ' ')),
+          indexText(row.models),
+          indexText(row.tags),
+          indexText(row.description),
+          indexText(row.channel),
+        ]),
+      });
+    }
+
+    // One batch, so a video is never left with its old row deleted and its new
+    // row not yet written — which would make it unfindable rather than stale.
+    await this.batch(statements);
+    return rows.length;
+  }
+
+  /** The indexed document for one chunk of ids, read from the database. */
+  async #read(videoIds: readonly string[]): Promise<IndexRow[]> {
+    return this.all<IndexRow>(
       `SELECT
          v.id          AS videoId,
          v.title       AS title,
@@ -79,39 +129,8 @@ export class SearchIndexRepository extends BaseRepository {
          ), '') AS models
        FROM videos v
        LEFT JOIN channels ch ON ch.id = v.channel_id
-       WHERE v.id IN (${placeholders})`,
+       WHERE v.id IN (${placeholders(videoIds.length)})`,
       [...videoIds],
     );
-
-    const statements: { sql: string; bindings: Binding[] }[] = [];
-
-    // Every id is cleared, including ones the SELECT did not return — a video
-    // that has been hard-deleted must lose its index row too, or it stays
-    // findable by search forever.
-    for (const id of videoIds) {
-      statements.push({ sql: `DELETE FROM videos_fts WHERE video_id = ?`, bindings: [id] });
-    }
-
-    for (const row of rows) {
-      statements.push({
-        sql: `INSERT INTO videos_fts
-                (video_id, title, manufacturers, models, tags, description, channel)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        bindings: [
-          row.videoId,
-          indexText(row.title),
-          indexText(row.manufacturers.replaceAll(',', ' ')),
-          indexText(row.models),
-          indexText(row.tags),
-          indexText(row.description),
-          indexText(row.channel),
-        ],
-      });
-    }
-
-    // One batch, so a video is never left with its old row deleted and its new
-    // row not yet written — which would make it unfindable rather than stale.
-    await this.batch(statements);
-    return rows.length;
   }
 }

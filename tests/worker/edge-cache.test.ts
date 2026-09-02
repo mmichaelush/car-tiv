@@ -203,6 +203,31 @@ describe('routes with a path parameter', () => {
   it('still ignores parameters those routes do not read', () => {
     expect(keyOf('/api/videos/dQw4w9WgXcQ?utm_source=x')).toBe(keyOf('/api/videos/dQw4w9WgXcQ'));
   });
+
+  it('treats include as a set, whatever order it arrives in', () => {
+    // The handler asks whether `include` *contains* each name, so these two
+    // requests produce byte-identical bodies. Keyed on the raw string they
+    // were two entries for one answer — halving the hit rate, doubling the D1
+    // reads, and leaving `purgeVideo` (which builds one spelling) to evict one
+    // of them while the other served an editor's stale video for its whole TTL.
+    expect(keyOf('/api/videos/dQw4w9WgXcQ?include=channel,related')).toBe(
+      keyOf('/api/videos/dQw4w9WgXcQ?include=related,channel'),
+    );
+  });
+
+  it('ignores repetition and spacing in include', () => {
+    expect(keyOf('/api/videos/dQw4w9WgXcQ?include=related,%20related,channel')).toBe(
+      keyOf('/api/videos/dQw4w9WgXcQ?include=channel,related'),
+    );
+  });
+
+  it('does not silently drop an include value it does not recognise', () => {
+    // A key that discards part of its input is how a future `include=transcript`
+    // gets served the cached answer that has no transcript in it.
+    expect(keyOf('/api/videos/dQw4w9WgXcQ?include=related,transcript')).not.toBe(
+      keyOf('/api/videos/dQw4w9WgXcQ?include=related'),
+    );
+  });
 });
 
 describe('routes the router itself has to match', () => {

@@ -15,9 +15,10 @@
 
 import type { D1Database } from '@cloudflare/workers-types';
 import type { ImportDraft } from '@shared/core/import-mapping.js';
-import { indexText, slugify } from '@shared/core/text.js';
+import { slugify } from '@shared/core/text.js';
 import { newId } from '../lib/crypto.js';
 import { BaseRepository } from './base.js';
+import { SearchIndexRepository } from './search-index-repository.js';
 
 export type ImportFormat = 'json' | 'csv' | 'xlsx' | 'youtube-urls';
 
@@ -143,6 +144,7 @@ export class ImportRepository extends BaseRepository {
     let updated = 0;
     let duplicates = 0;
     let failed = 0;
+    const written: string[] = [];
 
     for (const row of rows) {
       try {
@@ -150,11 +152,25 @@ export class ImportRepository extends BaseRepository {
         if (outcome === 'inserted') imported += 1;
         else if (outcome === 'updated') updated += 1;
         else duplicates += 1;
+        if (outcome !== 'skipped') written.push(row.draft.videoId);
       } catch (cause) {
         failed += 1;
         await this.#recordError(jobId, row, cause);
       }
     }
+
+    // Indexed once for the whole batch, by the one repository that knows what
+    // the indexed document contains.
+    //
+    // The importer used to write its own FTS row per video, and it wrote the
+    // `manufacturers` and `models` columns as empty strings — it has a draft,
+    // not the vehicle joins. So every imported video was unfindable by the make
+    // or model it is about until some later edit happened to reindex it, which
+    // for most of the catalog is never. `SearchIndexRepository` reads the
+    // document back from the database, so it gets those columns right, and
+    // having exactly one answer to "what does the index contain?" is the reason
+    // that class of divergence cannot come back.
+    await new SearchIndexRepository(this.db).reindex(written);
 
     await this.run(
       `UPDATE import_jobs
@@ -248,7 +264,7 @@ export class ImportRepository extends BaseRepository {
     }
 
     await this.#writeTags(draft);
-    await this.#writeSearchIndex(draft, channelId);
+    // The search index is written once per batch by `importBatch`, not here.
 
     return existing == null ? 'inserted' : 'updated';
   }
@@ -328,30 +344,6 @@ export class ImportRepository extends BaseRepository {
         [draft.videoId, slug],
       );
     }
-  }
-
-  /**
-   * Keep the FTS row in step.
-   *
-   * Written here rather than by a trigger because the index stores normalised
-   * text (`indexText`), and a SQLite trigger cannot call our normaliser — the
-   * one place a search index can silently stop matching Hebrew.
-   */
-  async #writeSearchIndex(draft: ImportDraft, channelId: number | null): Promise<void> {
-    const channel = channelId == null ? '' : draft.channelName;
-
-    await this.run(`DELETE FROM videos_fts WHERE video_id = ?`, [draft.videoId]);
-    await this.run(
-      `INSERT INTO videos_fts (video_id, title, manufacturers, models, tags, description, channel)
-       VALUES (?, ?, '', '', ?, ?, ?)`,
-      [
-        draft.videoId,
-        indexText(draft.title),
-        indexText(draft.tags.join(' ')),
-        indexText(draft.description),
-        indexText(channel),
-      ],
-    );
   }
 
   async #recordError(jobId: string, row: ImportRow, cause: unknown): Promise<void> {

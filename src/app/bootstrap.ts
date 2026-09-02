@@ -13,6 +13,7 @@ import { mountAccountMenu } from '../features/account/account-menu.js';
 import { applyPreferences } from '../features/preferences/preferences.js';
 import { registerServiceWorker } from '../features/pwa/service-worker.js';
 import { mountShell, type ShellOptions } from '../ui/layout/shell.js';
+import { setStorageFailureReporter } from '../data/library-repository.js';
 import { toastError } from '../ui/components/toast.js';
 
 /**
@@ -30,6 +31,7 @@ export function startPage(options: ShellOptions = {}): void {
   mountShell(options);
   setCanonicalUrl();
   installGlobalErrorReporting();
+  installStorageFailureReporting();
 
   // No third-party script in the management area.
   //
@@ -48,6 +50,26 @@ export function startPage(options: ShellOptions = {}): void {
   void initAccount();
 
   registerServiceWorker();
+}
+
+/**
+ * Say so when the browser refuses to store the library.
+ *
+ * `library-repository` cannot show a toast itself — nothing in `src/data/`
+ * imports from `src/ui/` — so it reports the failure and this installs the
+ * handler. Without it, favouriting a video in Safari's private mode filled the
+ * heart, moved the card, and lost the change on the next reload, silently.
+ *
+ * The message names both likely causes, because the visitor can act on one of
+ * them and at least understand the other.
+ */
+function installStorageFailureReporting(): void {
+  setStorageFailureReporter(() => {
+    toastError(
+      'לא הצלחנו לשמור את השינוי במכשיר הזה — ייתכן שאחסון הדפדפן מלא או שאתם בגלישה פרטית. הרשימה תיעלם ברענון.',
+      { durationMs: 9_000 },
+    );
+  });
 }
 
 /**

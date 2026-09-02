@@ -422,3 +422,36 @@ describe('GET /api/videos/:id?include=', () => {
     expect(body.data?.channelVideos).toBeNull();
   });
 });
+
+describe('unbounded query parameters', () => {
+  // Both of these routes read their parameters raw while `/api/videos` clamped
+  // through `parseQuery`. Both are cached with `q` in the key, so an unbounded
+  // value was an unbounded FTS query *and* an unbounded cache key — a way to
+  // fill the edge cache with entries nobody will ever request again.
+  const huge = 'א'.repeat(5_000);
+
+  it('clamps the search suggestion query', async () => {
+    const { status } = await api.json(`/api/search/suggestions?q=${encodeURIComponent(huge)}`);
+    expect(status).toBe(200);
+  });
+
+  it('clamps the tag search query', async () => {
+    const { status } = await api.json(`/api/tags/search?q=${encodeURIComponent(huge)}`);
+    expect(status).toBe(200);
+  });
+
+  it('clamps the tag search category', async () => {
+    const { status } = await api.json(
+      `/api/tags/search?q=שמן&category=${encodeURIComponent(huge)}`,
+    );
+    expect(status).toBe(200);
+  });
+
+  it('still answers a normal suggestion query', async () => {
+    const { status, body } = await api.json<ApiEnvelope<unknown[]>>(
+      '/api/search/suggestions?q=טוי',
+    );
+    expect(status).toBe(200);
+    expect(Array.isArray(body.data)).toBe(true);
+  });
+});

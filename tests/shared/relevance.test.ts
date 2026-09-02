@@ -6,8 +6,6 @@ import {
   scoreRelated,
 } from '@shared/core/relevance.js';
 
-const now = new Date('2026-09-01T00:00:00Z');
-
 const video = (overrides: Partial<RelatableVideo> & { id: string }): RelatableVideo => ({
   categoryId: 'maintenance',
   channelSlug: 'auto-il',
@@ -29,12 +27,12 @@ describe('scoreRelated', () => {
   });
 
   it('never relates a video to itself', () => {
-    expect(scoreRelated(source, source, now)).toBe(0);
+    expect(scoreRelated(source, source)).toBe(0);
   });
 
   it('scores an unrelated video as zero', () => {
     const other = video({ id: 'other000001', categoryId: 'offroad', channelSlug: 'x', tags: [] });
-    expect(scoreRelated(source, other, now)).toBe(0);
+    expect(scoreRelated(source, other)).toBe(0);
   });
 
   it('weights the same model above the same manufacturer', () => {
@@ -50,9 +48,7 @@ describe('scoreRelated', () => {
       channelSlug: null,
       manufacturers: ['toyota'],
     });
-    expect(scoreRelated(source, sameModel, now)).toBeGreaterThan(
-      scoreRelated(source, sameMake, now),
-    );
+    expect(scoreRelated(source, sameModel)).toBeGreaterThan(scoreRelated(source, sameMake));
   });
 
   it('adds up category, tags and channel', () => {
@@ -62,7 +58,7 @@ describe('scoreRelated', () => {
       channelSlug: 'auto-il',
       tags: ['שמן'],
     });
-    expect(scoreRelated(source, candidate, now)).toBe(
+    expect(scoreRelated(source, candidate)).toBe(
       RELATED_WEIGHTS.sameCategory + RELATED_WEIGHTS.sharedTag + RELATED_WEIGHTS.sameChannel,
     );
   });
@@ -75,15 +71,34 @@ describe('scoreRelated', () => {
       tags: ['שמן', 'מנוע', 'שמן2', 'מנוע2'],
     });
     const source6 = { ...source, tags: ['שמן', 'מנוע', 'שמן2', 'מנוע2', 'x', 'y'] };
-    expect(scoreRelated(source6, spam, now)).toBe(3 * RELATED_WEIGHTS.sharedTag);
+    expect(scoreRelated(source6, spam)).toBe(
+      RELATED_WEIGHTS.maxSharedTags * RELATED_WEIGHTS.sharedTag,
+    );
   });
 
-  it('gives a small bonus to recently added videos', () => {
+  it('does not score recency, because the SQL does not either', () => {
+    // There was a `recencyBonus` here and nothing like it in
+    // `VideoRepository.findRelated`, so the two rankings disagreed and
+    // `docs/api.md` documented the one that does not run. Recency belongs in
+    // the tie-break — see the `rankRelated` test below — not in the score.
     const old = video({ id: 'e0000000001', tags: ['שמן'], addedAt: '2019-01-01' });
     const fresh = video({ id: 'f0000000001', tags: ['שמן'], addedAt: '2026-08-20' });
-    expect(scoreRelated(source, fresh, now) - scoreRelated(source, old, now)).toBe(
-      RELATED_WEIGHTS.recencyBonus,
-    );
+
+    expect(scoreRelated(source, fresh)).toBe(scoreRelated(source, old));
+  });
+
+  it('uses the same weights the query interpolates', () => {
+    // The module is the single source of these numbers now: the `scored` CTE
+    // in `video-repository.ts` interpolates this object rather than restating
+    // it. Anything here that the SQL cannot express is drift waiting to happen.
+    expect(Object.keys(RELATED_WEIGHTS).sort()).toEqual([
+      'maxSharedTags',
+      'sameCategory',
+      'sameChannel',
+      'sameManufacturer',
+      'sameModel',
+      'sharedTag',
+    ]);
   });
 });
 
@@ -95,11 +110,11 @@ describe('rankRelated', () => {
       video({ id: 'sametag0001', categoryId: 'offroad', channelSlug: null, tags: ['שמן'] }),
       video({ id: 'samemodel01', categoryId: 'offroad', channelSlug: null, models: ['corolla'] }),
     ];
-    expect(rankRelated(source, candidates, 10, now).map((item) => item.id)).toEqual([
+    expect(rankRelated(source, candidates, 10).map((item) => item.id)).toEqual([
       'samemodel01',
       'sametag0001',
     ]);
-    expect(rankRelated(source, candidates, 1, now)).toHaveLength(1);
+    expect(rankRelated(source, candidates, 1)).toHaveLength(1);
   });
 
   it('breaks ties by recency, so the order is deterministic', () => {
@@ -118,7 +133,7 @@ describe('rankRelated', () => {
       tags: ['שמן'],
       addedAt: '2016-01-01',
     });
-    expect(rankRelated(source, [older, newer], 5, now).map((item) => item.id)).toEqual([
+    expect(rankRelated(source, [older, newer], 5).map((item) => item.id)).toEqual([
       'newer000001',
       'older000001',
     ]);

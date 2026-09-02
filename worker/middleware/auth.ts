@@ -1,16 +1,22 @@
 /**
  * Access control for `/api/admin/*`.
  *
- * Until accounts ship (the `accounts` feature flag), the admin is protected by
- * a single shared secret held as a Cloudflare secret and sent in an
- * `Authorization: Bearer …` header. That is deliberately modest, and it is
- * written so the upgrade is contained:
+ * Two ways in, checked in that order:
+ *
+ *   1. **A signed-in account holding a staff role.** The normal path, now that
+ *      accounts exist.
+ *   2. **A shared secret** held as a Cloudflare secret and sent in an
+ *      `Authorization: Bearer …` header. Deliberately modest, and the reason
+ *      the admin worked before sign-in did; it is also the way in when
+ *      `FEATURE_ACCOUNTS` is off, as it is in production today.
+ *
+ * The shape that made adding the first path cheap, and is worth keeping:
  *
  *   * the check happens in exactly one place — `requireStaff`;
  *   * it returns an `AdminIdentity`, which is what the rest of the code uses,
- *     so swapping the token for a session lookup changes this file only;
- *   * the comparison is constant-time, and a missing secret denies rather than
- *     allows.
+ *     so neither path is visible above this file;
+ *   * the token comparison is constant-time, and a missing secret denies rather
+ *     than allows.
  *
  * The URL is not a secret and is never treated as one: `/admin` returns the
  * page shell to anyone, and every piece of data on it requires the header.

@@ -26,7 +26,7 @@
 | Preloader עם לוגו וטיימר של 1.5 שניות | **הוחלף במודע** | הוחלף בשלדי טעינה (`skeletonGrid`). הטיימר הקבוע הוסיף 1.5 שניות לכל כניסה גם כשהתוכן היה מוכן — וזה עומד בניגוד ישיר לדרישת המהירות  |
 | כפתור "חזרה למעלה"                    | נשמר            | `mountBackToTop()` ב־`shell.ts`                                                                                                       |
 | תפריט נייד נפתח                       | נשמר            | `[data-menu-toggle]` ב־`shell.ts`                                                                                                     |
-| מצב כהה / בהיר                        | שודרג           | 6 ערכות נושא, 5 צבעי הדגשה ו־3 צפיפויות — `src/features/preferences/`                                                                 |
+| מצב כהה / בהיר                        | שודרג           | 8 ערכות נושא, 5 צבעי הדגשה ו־3 צפיפויות — `src/features/preferences/`                                                                 |
 | Google Tag Manager                    | נשמר            | `loadAnalytics()` ב־`src/app/bootstrap.ts`, עם המזהה מ־`VITE_GTM_ID`. נטען אחרי העמוד ולא בראשו, לא רץ ב־localhost ומכבד `doNotTrack` |
 
 ## 2. קטגוריות

@@ -11,8 +11,17 @@ import type { VideoSummary } from '../types/catalog.js';
 
 /**
  * How much each kind of match contributes to the "related" score.
- * Taken from the upgrade plan: same model 5, same manufacturer 4, same
- * category 3, shared tag 2, same channel 1.
+ *
+ * Same model 5, same manufacturer 4, same category 3, shared tag 2 (up to
+ * three tags), same channel 1.
+ *
+ * `video-repository.ts` interpolates these numbers into the SQL rather than
+ * restating them, which is what the paragraph above finally means. It did
+ * restate them, and the two copies had already drifted: this object carried a
+ * `recencyBonus: 1` that the query never applied and `docs/api.md` documented
+ * as if it did. Recency is not a weight here — the query breaks ties with
+ * `ORDER BY score DESC, added_at DESC`, which is the same intent expressed
+ * where it belongs.
  */
 export const RELATED_WEIGHTS = {
   sameModel: 5,
@@ -20,8 +29,12 @@ export const RELATED_WEIGHTS = {
   sameCategory: 3,
   sharedTag: 2,
   sameChannel: 1,
-  /** Small nudge so that, all else equal, newer videos win. */
-  recencyBonus: 1,
+  /**
+   * How many shared tags can count. A video sharing eight tags is not four
+   * times as related as one sharing two; without the cap, tags outweigh the
+   * vehicle match that is usually the real reason someone is watching.
+   */
+  maxSharedTags: 3,
 } as const;
 
 /**
@@ -53,15 +66,16 @@ export interface RelatableVideo {
  * Score `candidate` against `source`. Higher is more related; `0` means
  * "nothing in common" and the candidate should be dropped.
  *
- * The function is intentionally total and side-effect free so it can be used
- * both by the static fallback repository and by unit tests that pin the
- * ordering of a fixed dataset.
+ * This is the same arithmetic `VideoRepository.findRelated` expresses in SQL,
+ * and it now uses the same constants — the `scored` CTE interpolates
+ * `RELATED_WEIGHTS`. `tests/shared/relevance.test.ts` pins the ordering on a
+ * fixed dataset, which is the cheap way to reason about a ranking rule without
+ * a database.
+ *
+ * Total and side-effect free, so it can also serve a listing assembled in
+ * memory — the ranking rule does not have to move to wherever the data is.
  */
-export function scoreRelated(
-  source: RelatableVideo,
-  candidate: RelatableVideo,
-  now: Date = new Date(),
-): number {
+export function scoreRelated(source: RelatableVideo, candidate: RelatableVideo): number {
   if (candidate.id === source.id) return 0;
 
   let score = 0;
@@ -73,7 +87,7 @@ export function scoreRelated(
   if (candidate.categoryId === source.categoryId) score += RELATED_WEIGHTS.sameCategory;
 
   const sharedTags = countShared(source.tags, candidate.tags);
-  score += Math.min(sharedTags, 3) * RELATED_WEIGHTS.sharedTag;
+  score += Math.min(sharedTags, RELATED_WEIGHTS.maxSharedTags) * RELATED_WEIGHTS.sharedTag;
 
   if (
     candidate.channelSlug != null &&
@@ -83,8 +97,10 @@ export function scoreRelated(
     score += RELATED_WEIGHTS.sameChannel;
   }
 
-  if (score > 0 && isRecent(candidate.addedAt, now)) score += RELATED_WEIGHTS.recencyBonus;
-
+  // No recency term. There used to be one here and nowhere in the SQL, so the
+  // two rankings disagreed and `docs/api.md` documented the one that does not
+  // run. Recency breaks ties in `rankRelated` and in the query's `ORDER BY`,
+  // which is the same intent without a second, invisible copy of it.
   return score;
 }
 
@@ -96,10 +112,9 @@ export function rankRelated<T extends RelatableVideo>(
   source: RelatableVideo,
   candidates: readonly T[],
   limit: number,
-  now: Date = new Date(),
 ): T[] {
   return candidates
-    .map((candidate) => ({ candidate, score: scoreRelated(source, candidate, now) }))
+    .map((candidate) => ({ candidate, score: scoreRelated(source, candidate) }))
     .filter((entry) => entry.score > 0)
     .sort(
       (a, b) =>
@@ -135,11 +150,4 @@ function countShared(left: readonly string[], right: readonly string[]): number 
   if (left.length === 0 || right.length === 0) return 0;
   const set = new Set(right);
   return left.reduce((total, value) => (set.has(value) ? total + 1 : total), 0);
-}
-
-/** "Recent" for the ranking bonus means added in the last 90 days. */
-function isRecent(isoDate: string, now: Date): boolean {
-  const added = Date.parse(isoDate);
-  if (Number.isNaN(added)) return false;
-  return now.getTime() - added < 90 * 86_400_000;
 }

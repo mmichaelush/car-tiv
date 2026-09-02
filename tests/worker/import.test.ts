@@ -429,4 +429,60 @@ describe('re-importing an existing video', () => {
     expect(relational).toEqual(['טויוטה']);
     expect(indexed).not.toContain('קורולה');
   });
+
+  it('indexes the vehicle columns, not just the ones the draft knows', async () => {
+    // The importer used to write its own FTS row from the draft it had in hand,
+    // and a draft has no vehicle joins — so it wrote `manufacturers` and
+    // `models` as empty strings. Every imported video was therefore unfindable
+    // by the make or model it is actually about, and nothing would ever have
+    // corrected it: only an admin edit rewrites an index row, and most of the
+    // catalog is never edited. It now goes through `SearchIndexRepository`,
+    // which reads the document back from the database.
+    await importOne({ tags: ['טויוטה'] });
+
+    const row = db.queryRaw<{ manufacturers: string; models: string }>(
+      `SELECT manufacturers, models FROM videos_fts WHERE video_id = ?`,
+      IMPORT_VIDEO_ID,
+    )[0];
+
+    // The fixture row carries no vehicle, so these are empty — but they are
+    // empty because the database says so, having been read from the same
+    // joins the admin path reads. The assertion that matters is that exactly
+    // one index row exists and it came from the shared repository.
+    expect(row).toBeDefined();
+    expect(
+      db.queryRaw<{ n: number }>(
+        `SELECT COUNT(*) AS n FROM videos_fts WHERE video_id = ?`,
+        IMPORT_VIDEO_ID,
+      )[0]?.n,
+    ).toBe(1);
+  });
+
+  it('finds an imported video by a vehicle the import attached', async () => {
+    // The real proof of the above: attach a vehicle the way the catalog does,
+    // reimport, and search for the manufacturer. Under the old importer this
+    // returned nothing, because `manufacturers` was written as ''.
+    await importOne({ tags: ['טויוטה'] });
+
+    db.runRaw(`INSERT OR IGNORE INTO manufacturers (slug, name) VALUES ('mazda', 'מאזדה')`);
+    db.runRaw(
+      `INSERT OR IGNORE INTO vehicle_models (manufacturer_id, slug, name)
+       SELECT id, 'mazda-3', 'מאזדה 3' FROM manufacturers WHERE slug = 'mazda'`,
+    );
+    db.runRaw(
+      `INSERT OR IGNORE INTO video_vehicle_models (video_id, model_id)
+       SELECT ?, id FROM vehicle_models WHERE slug = 'mazda-3'`,
+      IMPORT_VIDEO_ID,
+    );
+
+    await importOne({ tags: ['טויוטה'] }, { updateExisting: true });
+
+    const indexed = db.queryRaw<{ manufacturers: string; models: string }>(
+      `SELECT manufacturers, models FROM videos_fts WHERE video_id = ?`,
+      IMPORT_VIDEO_ID,
+    )[0];
+
+    expect(indexed?.manufacturers).toContain('מאזדה');
+    expect(indexed?.models).toContain('מאזדה');
+  });
 });

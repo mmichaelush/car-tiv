@@ -40,19 +40,52 @@ export interface GrowthSample {
   readonly rowsThirtyDaysAgo: number | null;
 }
 
-/** Tables whose size follows traffic rather than the catalog. */
+/**
+ * The pairs `category_tag_counts` should hold, computed from the catalog.
+ *
+ * Written once and used by both halves of the reconciliation, so the "what it
+ * should be" definition cannot drift between the upsert and the delete — which
+ * would leave rows that neither statement ever touches again.
+ */
+const CATEGORY_TAG_AGGREGATE = `
+  SELECT v.category_id AS category_id, vt.tag_id AS tag_id, COUNT(*) AS n
+  FROM video_tags vt
+  JOIN videos v ON v.id = vt.video_id
+  JOIN tags t   ON t.id = vt.tag_id
+  WHERE v.status = 'published' AND v.deleted_at IS NULL AND t.is_visible = 1
+  GROUP BY v.category_id, vt.tag_id
+  HAVING COUNT(*) >= 2`;
+
+/**
+ * Tables whose size follows traffic rather than the catalog.
+ *
+ * Every table the retention pass prunes must appear here, and in
+ * `BYTES_PER_ROW` in `admin-routes.ts`. Four were missing:
+ * `search_query_daily` was added in migration 0009 and forgotten in all three
+ * places at once, and `table_growth_samples`, `import_jobs` and `usage_daily`
+ * were pruned by a policy that nothing was measuring. A table nobody watches
+ * is exactly the one that fills the 500 MB, and the storage forecast the admin
+ * page draws was quietly leaving them out of the total.
+ *
+ * `table_growth_samples` watching itself is intentional and safe: the counts
+ * are all read before any row is written.
+ */
 const WATCHED_TABLES = [
   'videos',
   'video_tags',
   'tags',
   'search_logs',
+  'search_query_daily',
   'admin_audit_log',
   'watch_history',
   'favorites',
   'sessions',
   'rate_limits',
+  'import_jobs',
   'import_job_errors',
   'maintenance_runs',
+  'table_growth_samples',
+  'usage_daily',
 ] as const;
 
 /**
@@ -65,6 +98,7 @@ const WATCHED_TABLES = [
  */
 type PrunableTable =
   | 'search_logs'
+  | 'search_query_daily'
   | 'admin_audit_log'
   | 'watch_history'
   | 'maintenance_runs'
@@ -106,14 +140,58 @@ export class CountersRepository extends BaseRepository {
   // -------------------------------------------------------------------------
 
   /**
-   * Recompute every counter.
+   * Recompute every counter, writing only the rows whose value actually moved.
    *
-   * This is the expensive pass — it is the aggregate that used to run on each
-   * request — and it is deliberately concentrated here, where it runs from the
-   * hourly cron and after a write that could have changed the numbers.
+   * ## The measurement that rewrote this
    *
-   * Each step is a single `UPDATE … FROM` (or an `INSERT … SELECT`), so the
-   * whole thing is a handful of statements rather than a loop over rows.
+   * The first version updated every row unconditionally. Against the real
+   * catalog that is:
+   *
+   * | statement                    | rows written |
+   * | ---------------------------- | -----------: |
+   * | `UPDATE categories`          |           10 |
+   * | `UPDATE channels`            |          416 |
+   * | `UPDATE tags`                |       10,732 |
+   * | `DELETE category_tag_counts` |        5,703 |
+   * | `INSERT category_tag_counts` |        5,703 |
+   * | `catalog_counters`           |            5 |
+   * | **total, per refresh**       |   **22,569** |
+   *
+   * D1's free plan allows 100,000 row writes a day, and since 1 September 2026
+   * queries *fail* once that is spent rather than merely being billed. The
+   * hourly cron alone came to 541,656 writes a day — five times the budget —
+   * and every admin edit triggered another full pass on top. The site would
+   * have started returning database errors within hours of going live, every
+   * day, and the cause would have looked like a Cloudflare outage rather than
+   * a line of our own SQL.
+   *
+   * The number of rows that actually *needed* writing in that measurement was
+   * zero. Nothing about the catalog had changed.
+   *
+   * ## What it does now
+   *
+   * Every statement carries a change guard, so the cost of a refresh is
+   * proportional to what moved rather than to the size of the catalog. Measured
+   * on the same data:
+   *
+   * | situation                        | rows written |
+   * | -------------------------------- | -----------: |
+   * | nothing changed (the hourly case) |            0 |
+   * | one video hidden (8 tags)         |           17 |
+   * | fifty videos hidden               |          351 |
+   *
+   * Plus the five `catalog_counters` rows, which are written every time on
+   * purpose: their `updated_at` is the heartbeat the admin page reads to answer
+   * "is the refresh actually running?", and a heartbeat that only beats when
+   * something changed cannot answer it. Five rows an hour is 120 a day.
+   *
+   * That makes the hourly cron cost 120 writes a day instead of 541,656, and it
+   * is also what makes calling this after an admin write reasonable: the call
+   * now costs what the edit was worth.
+   *
+   * The returned counts therefore mean "rows whose counter changed", not "rows
+   * examined" — which is the more useful number anyway, and the one the
+   * maintenance heartbeat reports.
    */
   async refreshAll(): Promise<CounterRefresh> {
     const started = Date.now();
@@ -129,66 +207,83 @@ export class CountersRepository extends BaseRepository {
 
   /** Live videos per category. */
   async #refreshCategories(): Promise<number> {
+    const live = `(
+      SELECT COUNT(*) FROM videos v
+      WHERE v.category_id = categories.id
+        AND v.status = 'published' AND v.deleted_at IS NULL
+    )`;
     const result = await this.run(
-      `UPDATE categories SET video_count = (
-         SELECT COUNT(*) FROM videos v
-         WHERE v.category_id = categories.id
-           AND v.status = 'published' AND v.deleted_at IS NULL
-       )`,
+      `UPDATE categories SET video_count = ${live} WHERE video_count <> ${live}`,
     );
     return Number(result.meta.changes);
   }
 
   /** Live videos per channel. */
   async #refreshChannels(): Promise<number> {
+    const live = `(
+      SELECT COUNT(*) FROM videos v
+      WHERE v.channel_id = channels.id
+        AND v.status = 'published' AND v.deleted_at IS NULL
+    )`;
     const result = await this.run(
-      `UPDATE channels SET video_count = (
-         SELECT COUNT(*) FROM videos v
-         WHERE v.channel_id = channels.id
-           AND v.status = 'published' AND v.deleted_at IS NULL
-       )`,
+      `UPDATE channels SET video_count = ${live} WHERE video_count <> ${live}`,
     );
     return Number(result.meta.changes);
   }
 
   /** Live videos per tag. */
   async #refreshTags(): Promise<number> {
+    const live = `(
+      SELECT COUNT(*) FROM video_tags vt
+      JOIN videos v ON v.id = vt.video_id
+      WHERE vt.tag_id = tags.id
+        AND v.status = 'published' AND v.deleted_at IS NULL
+    )`;
     const result = await this.run(
-      `UPDATE tags SET video_count = (
-         SELECT COUNT(*) FROM video_tags vt
-         JOIN videos v ON v.id = vt.video_id
-         WHERE vt.tag_id = tags.id
-           AND v.status = 'published' AND v.deleted_at IS NULL
-       )`,
+      `UPDATE tags SET video_count = ${live} WHERE video_count <> ${live}`,
     );
     return Number(result.meta.changes);
   }
 
   /**
-   * Rebuild `category_tag_counts` from scratch.
+   * Reconcile `category_tag_counts` with the catalog.
    *
-   * Delete-then-insert rather than an upsert, because a tag that lost its last
-   * video in a category has to lose its row, and reconciling that incrementally
-   * is more code and more ways to be wrong than simply recomputing a table that
-   * is only about thirteen thousand rows.
+   * This was a `DELETE` of the whole table followed by an `INSERT … SELECT`,
+   * which is 11,406 row writes every time it runs whether or not a single pair
+   * moved. The delete-then-insert was chosen because a tag that lost its last
+   * video in a category has to lose its row — but that is two statements, not a
+   * table rebuild: upsert the pairs whose count differs, then delete the pairs
+   * the aggregate no longer produces.
+   *
+   * Verified against the real catalog to leave a byte-identical table to the
+   * full rebuild, and to write nothing at all when nothing changed.
    *
    * Only pairs worth showing are stored: a tag used once in a category never
    * reaches a filter panel, and keeping the long tail would double the table
    * for no visible effect.
    */
   async #refreshCategoryTags(): Promise<number> {
-    await this.run(`DELETE FROM category_tag_counts`);
-    const result = await this.run(
+    const upserted = await this.run(
       `INSERT INTO category_tag_counts (category_id, tag_id, video_count)
-       SELECT v.category_id, vt.tag_id, COUNT(*) AS n
-       FROM video_tags vt
-       JOIN videos v ON v.id = vt.video_id
-       JOIN tags t   ON t.id = vt.tag_id
-       WHERE v.status = 'published' AND v.deleted_at IS NULL AND t.is_visible = 1
-       GROUP BY v.category_id, vt.tag_id
-       HAVING COUNT(*) >= 2`,
+       SELECT f.category_id, f.tag_id, f.n
+       FROM (${CATEGORY_TAG_AGGREGATE}) f
+       LEFT JOIN category_tag_counts c
+         ON c.category_id = f.category_id AND c.tag_id = f.tag_id
+       WHERE c.video_count IS NULL OR c.video_count <> f.n
+       ON CONFLICT (category_id, tag_id) DO UPDATE
+         SET video_count = excluded.video_count`,
     );
-    return Number(result.meta.changes);
+
+    const deleted = await this.run(
+      `DELETE FROM category_tag_counts
+       WHERE NOT EXISTS (
+         SELECT 1 FROM (${CATEGORY_TAG_AGGREGATE}) f
+         WHERE f.category_id = category_tag_counts.category_id
+           AND f.tag_id = category_tag_counts.tag_id
+       )`,
+    );
+
+    return Number(upserted.meta.changes) + Number(deleted.meta.changes);
   }
 
   /** The five catalog-wide numbers. */
@@ -230,15 +325,23 @@ export class CountersRepository extends BaseRepository {
   async sampleGrowth(): Promise<number> {
     const day = new Date().toISOString().slice(0, 10);
 
-    for (const table of WATCHED_TABLES) {
-      // The table names come from the frozen list above, never from input.
-      const rows = await this.count(`SELECT COUNT(*) AS value FROM ${table}`);
-      await this.run(
-        `INSERT INTO table_growth_samples (day, table_name, row_count) VALUES (?, ?, ?)
-         ON CONFLICT (day, table_name) DO UPDATE SET row_count = excluded.row_count`,
-        [day, table, rows],
-      );
-    }
+    // Two statements, not two per table. The loop version issued twenty-four
+    // queries, and D1's free plan caps a Worker invocation at fifty — with the
+    // link check, the counter refresh and the retention pass in the same cron
+    // invocation, this one job was most of the budget.
+    //
+    // The table names come from the frozen list above, never from input.
+    const counts = await this.first<Record<string, number>>(
+      `SELECT ${WATCHED_TABLES.map((table) => `(SELECT COUNT(*) FROM ${table}) AS "${table}"`).join(', ')}`,
+    );
+    if (counts == null) return 0;
+
+    await this.run(
+      `INSERT INTO table_growth_samples (day, table_name, row_count)
+       VALUES ${WATCHED_TABLES.map(() => '(?, ?, ?)').join(', ')}
+       ON CONFLICT (day, table_name) DO UPDATE SET row_count = excluded.row_count`,
+      WATCHED_TABLES.flatMap((table) => [day, table, counts[table] ?? 0]),
+    );
 
     return WATCHED_TABLES.length;
   }
@@ -273,6 +376,9 @@ export class CountersRepository extends BaseRepository {
 
     deleted += await this.#pruneByAge('search_logs', 'created_at', RETENTION.searchLogs.days);
     deleted += await this.#pruneToLimit('search_logs', 'id', RETENTION.searchLogs.maxRows);
+
+    // The rollup outlives the raw rows by design, but it is still bounded.
+    deleted += await this.#pruneByAge('search_query_daily', 'day', RETENTION.searchQueryDaily.days);
 
     deleted += await this.#pruneByAge('admin_audit_log', 'created_at', RETENTION.auditLog.days);
     deleted += await this.#pruneToLimit('admin_audit_log', 'id', RETENTION.auditLog.maxRows);

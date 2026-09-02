@@ -149,7 +149,13 @@ async function getChannel(context: RequestContext, params: RouteParams): Promise
     null,
     PAGINATION.defaultLimit,
   );
-  return ok({ channel, videos }, {}, { cache: CACHE.reference });
+  // `CACHE.catalog`, not `CACHE.reference`, even though a channel *is*
+  // reference data: this response also carries that channel's newest videos,
+  // and those are catalog rows. Under the reference TTL a video an editor had
+  // just hidden stayed visible on its channel page for an hour, while the same
+  // video vanished from every other listing in two minutes — which reads as
+  // the admin having half-worked.
+  return ok({ channel, videos }, {}, { cache: CACHE.catalog });
 }
 
 /** `GET /api/tags?category=` — the popular tags in the filter panel. */
@@ -165,16 +171,25 @@ async function listTags(context: RequestContext): Promise<Response> {
 /** `GET /api/tags/search?q=` — "add another tag". */
 async function searchTags(context: RequestContext): Promise<Response> {
   const params = context.url.searchParams;
+  // Clamped for the same reason as `/api/search/suggestions` below: both
+  // parameters are part of this route's cache key, so an unbounded value is an
+  // unbounded key as well as an unbounded LIKE.
   const tags = await context.repositories.catalog.searchTags(
-    params.get('q') ?? '',
-    params.get('category') ?? 'all',
+    (params.get('q') ?? '').slice(0, SEARCH.maxQueryLength),
+    (params.get('category') ?? 'all').slice(0, SEARCH.maxQueryLength),
   );
   return ok(tags, { count: tags.length }, { cache: CACHE.catalog });
 }
 
 /** `GET /api/search/suggestions?q=`. */
 async function suggestions(context: RequestContext): Promise<Response> {
-  const query = context.url.searchParams.get('q') ?? '';
+  // Clamped, not rejected. This is the box someone is typing into, so an
+  // over-long value is a paste or a probe, never a mistake worth a 400 —
+  // but it must not reach the index or the cache key unbounded. `/api/videos`
+  // has always clamped through `parseQuery`; this route read the parameter
+  // raw, and `q` is part of its cache key, so an unbounded string was both an
+  // unbounded FTS query and an unbounded key.
+  const query = (context.url.searchParams.get('q') ?? '').slice(0, SEARCH.maxQueryLength);
   if (query.trim().length < SEARCH.minQueryLength) return ok([], { count: 0 });
 
   const search = new SearchService(

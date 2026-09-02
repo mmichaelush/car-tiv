@@ -150,7 +150,9 @@ const handler = {
     // caches nothing for a Worker response, so every crawler hit — and a
     // crawler hits every page of the index — went to D1. A sitemap page is
     // 5,000 rows, so this was the single most expensive request on the site.
-    if (url.pathname.startsWith('/sitemap')) {
+    // `/robots.txt` rides with them: it names the sitemap by absolute URL,
+    // which means it needs `APP_URL`, which means it cannot be a static file.
+    if (url.pathname.startsWith('/sitemap') || url.pathname === '/robots.txt') {
       const match = sitemapRouter.match(request.method, url.pathname);
       if ('handler' in match) {
         const { response, hit } = await withEdgeCache(

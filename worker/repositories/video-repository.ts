@@ -7,6 +7,7 @@
  */
 
 import { RELATED, SEARCH } from '@shared/constants.js';
+import { RELATED_WEIGHTS } from '@shared/core/relevance.js';
 import { buildPageMeta, clampLimit, clampPage, offsetFor } from '@shared/core/pagination.js';
 import { indexText } from '@shared/core/text.js';
 import type { Page } from '@shared/types/api.js';
@@ -22,6 +23,8 @@ import {
   ConditionBuilder,
   LIST_SEPARATOR,
   type Binding,
+  chunkForBindings,
+  placeholders,
   splitList,
   toBoolean,
 } from './base.js';
@@ -71,6 +74,23 @@ const LIVE = `v.status = 'published' AND v.deleted_at IS NULL`;
  * never a value from a request.
  */
 const CANDIDATE_POOL = 150;
+
+/**
+ * The related-video weights, as SQL literals.
+ *
+ * Interpolated from `shared/core/relevance.ts` rather than written into the
+ * statement, so the query and the module that documents the rule cannot drift.
+ * They already had: the module carried a `recencyBonus` the SQL never applied
+ * and `docs/api.md` described as if it did.
+ *
+ * These are numbers from a frozen `as const` object, never from a request, so
+ * interpolating them does not weaken the no-string-concatenation rule — a
+ * weight cannot be a bound parameter, because SQLite would then have to
+ * re-plan the arithmetic on every call.
+ */
+const W: Readonly<Record<keyof typeof RELATED_WEIGHTS, string>> = Object.fromEntries(
+  Object.entries(RELATED_WEIGHTS).map(([name, weight]) => [name, String(weight)]),
+) as Readonly<Record<keyof typeof RELATED_WEIGHTS, string>>;
 
 interface SummaryRow {
   id: string;
@@ -383,14 +403,14 @@ export class VideoRepository extends BaseRepository {
        ),
        scored AS (
          SELECT v.id,
-           5 * (SELECT COUNT(*) > 0 FROM video_vehicle_models x
+           ${W.sameModel} * (SELECT COUNT(*) > 0 FROM video_vehicle_models x
                 WHERE x.video_id = v.id AND x.model_id IN (SELECT model_id FROM source_models))
-         + 4 * (SELECT COUNT(*) > 0 FROM video_vehicle_models x
+         + ${W.sameManufacturer} * (SELECT COUNT(*) > 0 FROM video_vehicle_models x
                 WHERE x.video_id = v.id AND x.model_id IN (SELECT id FROM make_models))
-         + 3 * (v.category_id = (SELECT category_id FROM source))
-         + 2 * MIN(3, (SELECT COUNT(*) FROM video_tags x
+         + ${W.sameCategory} * (v.category_id = (SELECT category_id FROM source))
+         + ${W.sharedTag} * MIN(${String(RELATED_WEIGHTS.maxSharedTags)}, (SELECT COUNT(*) FROM video_tags x
                        WHERE x.video_id = v.id AND x.tag_id IN (SELECT tag_id FROM source_tags)))
-         + 1 * (v.channel_id IS NOT NULL AND v.channel_id = (SELECT channel_id FROM source))
+         + ${W.sameChannel} * (v.channel_id IS NOT NULL AND v.channel_id = (SELECT channel_id FROM source))
            AS score
          FROM videos v
          JOIN candidates c ON c.id = v.id
@@ -424,16 +444,30 @@ export class VideoRepository extends BaseRepository {
     return rows.map(toSummary);
   }
 
-  /** Look up several videos at once, preserving the caller's order. */
+  /**
+   * Look up several videos at once, preserving the caller's order.
+   *
+   * Chunked here rather than by the caller. It was safe only by coincidence:
+   * `account-routes.ts` sliced the list by `PAGINATION.maxLimit`, which is 60
+   * and therefore under D1's 100-parameter limit — but that constant exists to
+   * cap a page size, and raising it for a perfectly good pagination reason
+   * would have broken a query in another file with no visible connection to it.
+   * The repository is the layer that knows about the database's limits, so it
+   * is the layer that keeps them.
+   */
   async findManyByIds(ids: readonly VideoId[]): Promise<VideoSummary[]> {
     if (ids.length === 0) return [];
-    const placeholders = ids.map(() => '?').join(', ');
-    const rows = await this.all<SummaryRow>(
-      `SELECT ${SUMMARY_COLUMNS} ${SUMMARY_FROM} WHERE v.id IN (${placeholders}) AND ${LIVE}`,
-      [...ids],
-    );
 
-    const byId = new Map(rows.map((row) => [row.id, toSummary(row)]));
+    const byId = new Map<string, VideoSummary>();
+    for (const chunk of chunkForBindings(ids)) {
+      const rows = await this.all<SummaryRow>(
+        `SELECT ${SUMMARY_COLUMNS} ${SUMMARY_FROM}
+         WHERE v.id IN (${placeholders(chunk.length)}) AND ${LIVE}`,
+        [...chunk],
+      );
+      for (const row of rows) byId.set(row.id, toSummary(row));
+    }
+
     return ids.map((id) => byId.get(id)).filter((video): video is VideoSummary => video != null);
   }
 
