@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    /*
+     * UI tests run in happy-dom and exercise browser code, so they need the DOM
+     * library — which is exactly what `tsconfig.test.json` must not have. The
+     * two cannot be one project: `@cloudflare/workers-types` and `lib.dom`
+     * both declare `Request`, `Response` and `ReadableStream`.
+     *
+     * Hence the split: `tests/ui/**` belongs here, every other test belongs to
+     * `tsconfig.test.json`.
+     */
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    "types": ["vite/client"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test-ui.tsbuildinfo"
+  },
+  "include": ["tests/ui/**/*.ts", "src/**/*.ts", "shared/**/*.ts"]
+}

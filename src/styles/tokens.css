@@ -1,0 +1,176 @@
+/* ==========================================================================
+   Design tokens
+   --------------------------------------------------------------------------
+   Every colour, size, radius and shadow in the product comes from a variable
+   defined here. A component that hard-codes `#a855f7` or `18px` is a bug: it
+   breaks theming, it breaks the density setting, and it makes a redesign a
+   search-and-replace instead of an edit to one file.
+
+   Three groups:
+     1. Primitive scales   — the raw palette and the spacing/type ramps.
+     2. Semantic tokens    — what a colour *means* (`--surface`, `--text`).
+                             Components only ever use these.
+     3. Component tokens   — sizes a component owns (card radius, header height).
+
+   Themes (themes.css) redefine group 2 only. Density redefines a small part of
+   group 1. Nothing else changes.
+   ========================================================================== */
+
+:root {
+  /*
+   * Text scale.
+   *
+   * Multiplies the whole type ramp. Deliberately separate from density:
+   * "make the words bigger" and "fit more on screen" are different requests,
+   * and a visitor who needs larger text usually does not want larger cards
+   * with it. Applied by [data-text-size] below.
+   */
+  --text-scale: 1;
+
+  /* ---------------------------------------------------------------- 1. Scales */
+
+  /* Brand ramp — the purple the site has always used, extended into a full
+     scale so hover, active and focus states are related rather than invented. */
+  --purple-50: #faf5ff;
+  --purple-100: #f3e8ff;
+  --purple-200: #e9d5ff;
+  --purple-300: #d8b4fe;
+  --purple-400: #c084fc;
+  --purple-500: #a855f7;
+  --purple-600: #9333ea;
+  --purple-700: #7e22ce;
+  --purple-800: #6b21a8;
+  --purple-900: #581c87;
+  --purple-950: #3b0764;
+
+  /* Neutral ramp, tinted very slightly purple so greys sit with the brand. */
+  --ink-0: #ffffff;
+  --ink-50: #f8f6fb;
+  --ink-100: #f1edf6;
+  --ink-200: #e2dbec;
+  --ink-300: #c8bdd6;
+  --ink-400: #9c8fae;
+  --ink-500: #746685;
+  --ink-600: #574a66;
+  --ink-700: #3d3149;
+  --ink-800: #291f33;
+  --ink-900: #191122;
+  --ink-950: #0e0916;
+
+  /* Status colours. */
+  --green-400: #34d399;
+  --green-600: #059669;
+  --amber-400: #fbbf24;
+  --amber-600: #d97706;
+  --red-400: #fb7185;
+  --red-600: #be123c;
+  --blue-400: #60a5fa;
+
+  /* Spacing ramp, 4px based. `--space-0` exists so a value can be zeroed
+     without leaving the system. */
+  --space-0: 0;
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.5rem;
+  --space-6: 2rem;
+  --space-7: 3rem;
+  --space-8: 4rem;
+  --space-9: 6rem;
+
+  /* Type ramp. The display sizes are fluid so a phone does not get a 5rem
+     heading and a wide desktop does not get a small one. */
+  --text-xs: calc(0.75rem * var(--text-scale));
+  --text-sm: calc(0.8125rem * var(--text-scale));
+  --text-base: calc(0.9375rem * var(--text-scale));
+  --text-md: calc(1rem * var(--text-scale));
+  --text-lg: calc(1.125rem * var(--text-scale));
+  --text-xl: calc(clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem) * var(--text-scale));
+  --text-2xl: calc(clamp(1.5rem, 1.25rem + 1.1vw, 2rem) * var(--text-scale));
+  --text-3xl: calc(clamp(1.875rem, 1.4rem + 2vw, 2.75rem) * var(--text-scale));
+  --text-display: calc(clamp(2.25rem, 1.4rem + 4vw, 4.25rem) * var(--text-scale));
+
+  --font-body: 'Rubik', system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.6;
+  --leading-relaxed: 1.8;
+
+  /* Radii. */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 22px;
+  --radius-2xl: 28px;
+  --radius-pill: 999px;
+
+  /* Motion. Every transition uses one of these, so the interface feels like
+     one product rather than a collection of components. */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --duration-fast: 120ms;
+  --duration-base: 200ms;
+  --duration-slow: 380ms;
+
+  /* Stacking order, declared once so no component invents a z-index. */
+  --z-sticky: 10;
+  --z-header: 40;
+  --z-dropdown: 50;
+  --z-overlay: 80;
+  --z-toast: 100;
+
+  /* ------------------------------------------------- 3. Component tokens */
+
+  --header-height: 68px;
+  --page-max: 1280px;
+  --page-gutter: clamp(1rem, 4vw, 2.5rem);
+
+  /* Density-controlled. Overridden by [data-density] below. */
+  --card-radius: var(--radius-lg);
+  --card-padding: var(--space-4);
+  --grid-gap: var(--space-5);
+  --grid-min: 260px;
+  --control-height: 42px;
+}
+
+/* --------------------------------------------------------------- Density
+   "Compact" fits more on screen, "large" is easier to hit on a phone and
+   easier to read. Only these five variables change. */
+
+:root[data-density='compact'] {
+  --card-padding: var(--space-3);
+  --grid-gap: var(--space-3);
+  --grid-min: 210px;
+  --control-height: 36px;
+  --card-radius: var(--radius-md);
+}
+
+/* ------------------------------------------------------------- Text size
+   Only the multiplier changes; every size in the ramp follows it, so nothing
+   has to be re-tuned per step and nothing goes out of proportion. */
+
+:root[data-text-size='small'] {
+  --text-scale: 0.92;
+}
+
+:root[data-text-size='large'] {
+  --text-scale: 1.1;
+}
+
+:root[data-text-size='xlarge'] {
+  --text-scale: 1.22;
+}
+
+:root[data-density='large'] {
+  --card-padding: var(--space-5);
+  --grid-gap: var(--space-6);
+  --grid-min: 320px;
+  --control-height: 48px;
+  --text-base: 1rem;
+  --text-md: 1.0625rem;
+}

@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+coverage/
+.wrangler/
+*.tsbuildinfo
+
+# Generated catalog artefacts (rebuild with `npm run catalog:build`)
+build/
+public/static-data/
+
+# Environment / secrets — never commit these
+.dev.vars
+.env
+.env.*
+!.env.example
+# Committed on purpose: it holds only public build-time configuration
+# (the analytics container id), never a secret.
+!.env.production
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json

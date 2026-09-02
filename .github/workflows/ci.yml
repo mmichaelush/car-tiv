@@ -1,0 +1,38 @@
+# CI — the same four checks `npm run verify` runs locally, so a green local run
+# means a green pipeline. Nothing here is allowed to be a warning: a check that
+# can be ignored will be.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Format
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Types
+        run: npm run typecheck
+
+      - name: Tests
+        run: npm test
+
+      # Proves the legal pages still build from source and the site compiles.
+      - name: Build
+        run: npm run build

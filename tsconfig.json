@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "//": [
+    "This root config exists so editors have a default project.",
+    "Real type-checking runs per environment, because the browser, the Cloudflare",
+    "Workers runtime and Node have incompatible global type libraries:",
+    "  npm run typecheck  ->  tsconfig.client.json + tsconfig.worker.json + tsconfig.node.json"
+  ],
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["vite/client", "node"]
+  },
+  "include": ["shared/**/*.ts", "src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "*.config.ts"]
+}

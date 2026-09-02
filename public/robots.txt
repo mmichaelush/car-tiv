@@ -1,0 +1,15 @@
+# CAR־טיב
+
+User-agent: *
+Allow: /
+
+# The management area and the personal library hold nothing a crawler should
+# index — one is private, the other is per-device and empty without a visitor.
+Disallow: /admin/
+Disallow: /library/
+
+# A filtered listing is the same catalog in a different order; the canonical
+# pages are the category and channel pages, which are linked from the sitemap.
+Disallow: /search?
+
+Sitemap: /sitemap.xml

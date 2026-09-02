@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>חיפוש | CAR־טיב</title>
+    <meta
+      name="description"
+      content="חיפוש מתקדם במאגר סרטוני הרכב: לפי יצרן, דגם, שנה, קטגוריה, ערוץ ותגיות."
+    />
+    <meta name="theme-color" content="#0e0916" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CAR־טיב" />
+    <meta property="og:title" content="חיפוש | CAR־טיב" />
+    <meta
+      property="og:description"
+      content="חיפוש מתקדם במאגר סרטוני הרכב: לפי יצרן, דגם, שנה, קטגוריה, ערוץ ותגיות."
+    />
+    <meta property="og:image" content="/assets/images/logo.png" />
+    <link rel="icon" href="/assets/images/favicon.ico" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link
+      rel="preload"
+      href="/assets/fonts/rubik/rubik-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+    <script src="/theme-bootstrap.js"></script>
+    <script type="module" src="/src/app/search.ts"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">דילוג לתוכן</a>
+    <header class="site-header" data-site-header></header>
+
+    <main id="main">
+      <section class="page-header shell">
+        <p class="eyebrow">חיפוש</p>
+        <h1>מה תרצו למצוא?</h1>
+        <form
+          class="search"
+          role="search"
+          data-page-search
+          style="max-width: 44rem; margin-block-start: var(--space-4)"
+        >
+          <span class="search__icon" aria-hidden="true"></span>
+          <label class="sr-only" for="page-search-input">חיפוש במאגר</label>
+          <input
+            id="page-search-input"
+            name="q"
+            type="search"
+            autocomplete="off"
+            placeholder="יצרן, דגם, תקלה או נושא…"
+          />
+          <button
+            type="button"
+            class="search__clear"
+            data-search-clear
+            hidden
+            aria-label="ניקוי החיפוש"
+          ></button>
+          <div class="suggestions" data-suggestions hidden></div>
+        </form>
+      </section>
+
+      <section class="section shell" data-catalog aria-labelledby="search-results-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow" data-page-eyebrow>תוצאות</p>
+            <h2 id="search-results-title" data-page-title>תוצאות החיפוש</h2>
+            <p class="muted" data-page-subtitle></p>
+          </div>
+          <div class="result-bar__tools">
+            <div class="segmented" data-view-switch role="group" aria-label="תצוגה">
+              <button type="button" data-view="grid" aria-pressed="true" aria-label="תצוגת רשת">
+                ▦
+              </button>
+              <button type="button" data-view="list" aria-pressed="false" aria-label="תצוגת רשימה">
+                ☰
+              </button>
+            </div>
+            <button
+              class="btn btn--secondary"
+              type="button"
+              data-filter-toggle
+              aria-expanded="false"
+            >
+              סינון <span data-filter-count></span>
+            </button>
+          </div>
+        </div>
+        <div class="categories tag-cloud" data-categories aria-label="קטגוריות"></div>
+        <aside class="filters" data-filters hidden aria-label="סינון מתקדם"></aside>
+
+        <div class="result-bar">
+          <span data-result-summary>טוען סרטונים…</span>
+        </div>
+
+        <div class="video-grid" data-video-grid aria-live="polite"></div>
+        <div data-pager></div>
+      </section>
+    </main>
+
+    <footer class="site-footer" data-site-footer></footer>
+  </body>
+</html>

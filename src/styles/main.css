@@ -1,0 +1,22 @@
+/* ==========================================================================
+   CAR-טיב — the single stylesheet.
+
+   Import order matters and is deliberate:
+     1. tokens      — the variables everything else refers to
+     2. themes      — semantic tokens per colour scheme
+     3. base        — reset, typography, utilities
+     4. components  — one file per family, no cross-imports
+
+   There is no page-specific CSS outside `components/pages.css`, and no
+   component defines a colour or a size that is not a token. See
+   docs/design-system.md.
+   ========================================================================== */
+
+@import './tokens.css';
+@import './themes.css';
+@import './base.css';
+@import './components/controls.css';
+@import './components/layout.css';
+@import './components/cards.css';
+@import './components/overlays.css';
+@import './components/pages.css';

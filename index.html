@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>CAR־טיב | מאגר סרטוני הרכב הכשר</title>
+    <meta
+      name="description"
+      content="אלפי סרטוני רכב כשרים בעברית: סקירות ומבחני דרך, טיפולים ותיקונים, איתור תקלות, בטיחות, שטח ושדרוגים — מסודרים ונוחים לחיפוש."
+    />
+    <meta name="theme-color" content="#0e0916" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CAR־טיב" />
+    <meta property="og:title" content="CAR־טיב | מאגר סרטוני הרכב הכשר" />
+    <meta
+      property="og:description"
+      content="אלפי סרטוני רכב כשרים בעברית, מסודרים ונוחים לחיפוש."
+    />
+    <meta property="og:image" content="/assets/images/logo.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="icon" href="/assets/images/favicon.ico" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/images/logo.png" />
+    <link
+      rel="preload"
+      href="/assets/fonts/rubik/rubik-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+
+    <!-- Runs before the first paint; see public/theme-bootstrap.js -->
+    <script src="/theme-bootstrap.js"></script>
+    <script type="module" src="/src/app/home.ts"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">דילוג לתוכן</a>
+    <header class="site-header" data-site-header></header>
+
+    <main id="main">
+      <section class="hero">
+        <div class="shell">
+          <p class="eyebrow">מאגר הווידאו הכשר לחובבי רכב</p>
+          <h1>סרטוני רכב<br /><span>כשרים ומסוננים</span></h1>
+          <p class="hero__lede">
+            מאגר וידאו ענק ואיכותי, מסונן ופתוח ב<a
+              class="netfree-link"
+              href="https://netfree.link/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >נטפרי<img
+                src="https://netfree.link/wiki/images/6/6f/Netfree.png"
+                alt=""
+                width="18"
+                height="18"
+                loading="lazy" /></a
+            >, לכל חובבי הרכב שומרי התורה והמצוות.
+          </p>
+
+          <form class="search" role="search" data-hero-search>
+            <span class="search__icon" aria-hidden="true"></span>
+            <label class="sr-only" for="hero-search-input">חיפוש במאגר</label>
+            <input
+              id="hero-search-input"
+              name="q"
+              type="search"
+              autocomplete="off"
+              placeholder="מה תרצו לדעת על הרכב?"
+            />
+            <button
+              type="button"
+              class="search__clear"
+              data-search-clear
+              hidden
+              aria-label="ניקוי החיפוש"
+            ></button>
+            <kbd>/</kbd>
+            <div class="suggestions" data-suggestions hidden></div>
+          </form>
+
+          <p class="hero__stats" aria-live="polite">
+            <span><strong data-stat="videos">—</strong> סרטונים</span>
+            <span><strong data-stat="channels">—</strong> ערוצים</span>
+            <span><strong data-stat="categories">—</strong> קטגוריות</span>
+          </p>
+        </div>
+      </section>
+
+      <section class="section shell" aria-labelledby="categories-title">
+        <div class="section-heading section-heading--center">
+          <div>
+            <p class="eyebrow">קטגוריות</p>
+            <h2 id="categories-title">גלה את עולם הרכב</h2>
+          </div>
+        </div>
+        <div class="category-grid" data-category-grid></div>
+        <p class="section-footer-action">
+          <a class="btn btn--secondary" href="/search">לכל הסרטונים</a>
+        </p>
+      </section>
+
+      <!-- Dynamic rows, composed from the home_sections table. -->
+      <div class="shell" data-home-sections></div>
+
+      <section class="section shell" aria-labelledby="featured-channels-title">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">מומלצים</p>
+            <h2 id="featured-channels-title">
+              <a href="/channels/">ערוצים מומלצים</a>
+            </h2>
+            <p class="section-heading__note">
+              ערוצים מומלצים שדף הבית של הערוץ פתוח ב<a
+                class="netfree-link"
+                href="https://netfree.link/"
+                target="_blank"
+                rel="noopener noreferrer"
+                >נטפרי<img
+                  src="https://netfree.link/wiki/images/6/6f/Netfree.png"
+                  alt=""
+                  width="18"
+                  height="18"
+                  loading="lazy"
+              /></a>
+            </p>
+          </div>
+          <a class="btn btn--secondary" href="/channels/">כל הערוצים</a>
+        </div>
+
+        <div class="carousel" data-carousel>
+          <button
+            class="carousel__nav carousel__nav--start"
+            type="button"
+            data-carousel-prev
+            aria-label="גלילה אחורה"
+            hidden
+          ></button>
+          <div class="carousel__viewport" data-carousel-viewport tabindex="0">
+            <div class="channel-rail" data-featured-channels></div>
+          </div>
+          <button
+            class="carousel__nav carousel__nav--end"
+            type="button"
+            data-carousel-next
+            aria-label="גלילה קדימה"
+            hidden
+          ></button>
+        </div>
+      </section>
+
+      <section class="section shell">
+        <div class="panel-highlight">
+          <p class="eyebrow">קהילת הרכב</p>
+          <h2>שאלה או דיון בנושא רכב?</h2>
+          <p>הכנסו לפורום שלנו "רכבים זה לזה", שתפו, התייעצו וקבלו תשובות ממומחים וחברים.</p>
+          <a
+            class="btn btn--primary"
+            href="https://rechavimzelaze.ovh/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >כניסה לפורום</a
+          >
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer" data-site-footer></footer>
+  </body>
+</html>

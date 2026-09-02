@@ -1,0 +1,38 @@
+# Line endings.
+#
+# Every text file is stored with LF and checked out with LF, on every platform.
+#
+# This is not a style preference — it is what keeps the repository buildable on
+# Windows. `.prettierrc.json` sets `endOfLine: "lf"`, and CI runs
+# `prettier --check`. Without this file, Git on Windows converts text to CRLF on
+# checkout, and the very next `npm run format:check` reports *every* file as
+# badly formatted. Worse, a `npm run format` run there would rewrite the whole
+# tree and produce a diff touching every line of every file.
+#
+# `text=auto eol=lf` says: decide for yourself which files are text, and give
+# all of them LF in the working tree as well as in the repository.
+* text=auto eol=lf
+
+# Files that are definitely not text. Marking them explicitly means Git never
+# has to guess, and never "normalises" a byte in the middle of a font or an
+# image.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.ico    binary
+*.webp   binary
+*.woff   binary
+*.woff2  binary
+*.ttf    binary
+*.otf    binary
+*.pdf    binary
+*.zip    binary
+*.gz     binary
+
+# Generated, and large. Collapsed in diffs and excluded from language stats so
+# the repository is reported as what people actually wrote.
+package-lock.json  linguist-generated=true -diff
+data/videos/*.json linguist-generated=true
+privacy/index.html linguist-generated=true
+terms/index.html   linguist-generated=true

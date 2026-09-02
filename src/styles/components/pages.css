@@ -1,0 +1,474 @@
+/* ==========================================================================
+   Page-specific layouts: the video page, the form pages and the legal pages.
+   ========================================================================== */
+
+/* ------------------------------------------------------------ Video page */
+
+.video-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+  gap: var(--space-6);
+  align-items: start;
+  padding-block: var(--space-5) var(--space-8);
+}
+
+@media (max-width: 1000px) {
+  .video-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The player frame. The iframe is only inserted after the visitor presses
+   play — before that this is a thumbnail, which is what keeps the page from
+   loading a megabyte of YouTube code nobody asked for. */
+.player {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  background: #000;
+  border: 1px solid var(--line);
+}
+
+.player img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.player iframe {
+  inline-size: 100%;
+  block-size: 100%;
+  border: 0;
+}
+
+.player__play {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(to top, rgb(0 0 0 / 40%), transparent 60%);
+}
+
+.player__play::before {
+  content: '';
+  position: absolute;
+  inline-size: 76px;
+  block-size: 76px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: var(--shadow-lg);
+  transition: scale var(--duration-base) var(--ease-out);
+}
+
+.player__play:hover::before {
+  scale: 1.08;
+}
+
+.player__play svg {
+  position: relative;
+  inline-size: 30px;
+  block-size: 30px;
+  color: var(--on-brand);
+  margin-inline-start: 4px;
+}
+
+.video-detail h1 {
+  font-size: var(--text-2xl);
+  margin-block: var(--space-5) var(--space-3);
+}
+
+.video-detail__meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-4);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+}
+
+.video-detail__channel {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) 0;
+  margin-block: var(--space-4);
+  border-block: 1px solid var(--line);
+}
+
+.video-detail__channel img {
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--surface-3);
+}
+
+.video-detail__channel .btn {
+  margin-inline-start: auto;
+}
+
+.video-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-4);
+}
+
+.video-description {
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+  white-space: pre-line;
+}
+
+.video-description[data-collapsed='true'] {
+  display: -webkit-box;
+  -webkit-line-clamp: 5;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.video-vehicles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block: var(--space-4);
+}
+
+.sidebar-section + .sidebar-section {
+  margin-block-start: var(--space-6);
+}
+
+.sidebar-section h2 {
+  font-size: var(--text-lg);
+  margin-block-end: var(--space-4);
+}
+
+/* A compact row used in the sidebar and in the personal library. */
+.video-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 132px 1fr;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-md);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.video-row:hover {
+  background: var(--surface-2);
+}
+
+.video-row img {
+  inline-size: 132px;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  background: var(--surface-3);
+}
+
+.video-row h3 {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  line-height: var(--leading-snug);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.video-row h3 a::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.video-row small {
+  display: block;
+  margin-block-start: var(--space-1);
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+/* Progress bar for "continue watching". */
+.video-row__progress,
+.video-card__progress {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  block-size: 3px;
+  background: var(--surface-3);
+}
+
+.video-row__progress > i,
+.video-card__progress > i {
+  display: block;
+  block-size: 100%;
+  background: var(--brand);
+}
+
+/* ------------------------------------------------------------ Form pages */
+
+.form-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.8fr);
+  gap: var(--space-6);
+  align-items: start;
+  padding-block: var(--space-5) var(--space-8);
+}
+
+@media (max-width: 860px) {
+  .form-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+.panel {
+  padding: clamp(1.25rem, 3vw, 2rem);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+.panel + .panel {
+  margin-block-start: var(--space-4);
+}
+
+/* Set on a fallback panel when the primary path failed, so the visitor's eye
+   is taken to the way out instead of having to hunt for it. */
+.panel[data-highlighted] {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent);
+}
+
+.panel h2 {
+  font-size: var(--text-lg);
+  margin-block-end: var(--space-4);
+}
+
+.form-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.form-grid--2 {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.form-status {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+}
+
+.form-status[data-tone='success'] {
+  background: rgb(52 211 153 / 12%);
+  color: var(--success);
+}
+
+.form-status[data-tone='warning'] {
+  background: rgb(251 191 36 / 12%);
+  color: var(--warning);
+}
+
+.form-status[data-tone='error'] {
+  background: rgb(251 113 133 / 12%);
+  color: var(--danger);
+}
+
+.info-list {
+  display: grid;
+  gap: var(--space-3);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+}
+
+/* ---------------------------------------------------------- Legal pages */
+
+.prose {
+  max-inline-size: 62rem;
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+}
+
+.prose h2 {
+  color: var(--text);
+  font-size: var(--text-xl);
+  margin-block: var(--space-6) var(--space-3);
+  padding-block-start: var(--space-5);
+  border-block-start: 1px solid var(--line);
+}
+
+.prose h3 {
+  color: var(--text);
+  font-size: var(--text-md);
+  margin-block: var(--space-4) var(--space-2);
+}
+
+.prose p + p,
+.prose ul {
+  margin-block-start: var(--space-3);
+}
+
+.prose ul {
+  list-style: disc;
+  padding-inline-start: var(--space-5);
+  display: grid;
+  gap: var(--space-2);
+}
+
+.prose strong {
+  color: var(--text);
+}
+
+.prose a {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* A table of contents rendered above a long legal document. */
+.toc {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-2);
+  margin-block: var(--space-5);
+}
+
+.toc a {
+  padding: var(--space-3);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.toc a:hover {
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+/* --------------------------------------------------------- About section */
+
+.split {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: clamp(1.5rem, 5vw, 3.5rem);
+  align-items: center;
+}
+
+.split img {
+  inline-size: 100%;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+/* ------------------------------------------------------------ Data tables
+   Used by the admin's import screen. A table is allowed to be wider than the
+   page, but the page itself must never scroll sideways — hence the wrapper. */
+
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.table {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+  white-space: nowrap;
+}
+
+.table th,
+.table td {
+  padding: var(--space-2) var(--space-3);
+  text-align: start;
+  border-block-end: 1px solid var(--line);
+}
+
+.table th {
+  color: var(--text-muted);
+  font-weight: 600;
+  position: sticky;
+  inset-block-start: 0;
+  background: var(--surface);
+}
+
+.table td code {
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: var(--text-xs);
+}
+
+/* ---------------------------------------------------------------- Import */
+
+.import-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-block-start: var(--space-3);
+}
+
+.import-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-4);
+  margin-block-start: var(--space-5);
+}
+
+.import-progress {
+  flex: 1;
+  min-inline-size: 240px;
+}
+
+.import-progress__bar {
+  block-size: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+
+.import-progress__bar i {
+  display: block;
+  block-size: 100%;
+  background: var(--brand);
+  transition: width var(--duration-base) var(--ease-out);
+}
+
+.import-progress p {
+  margin-block-start: var(--space-2);
+  font-size: var(--text-xs);
+}
+
+/* ---------------------------------------------------------------------------
+   Progress bar
+   Used by the admin's resource panel to show how much of the database's 500 MB
+   plan limit is in use. Deliberately plain: it is a gauge, not a feature.
+   --------------------------------------------------------------------------- */
+.progress {
+  overflow: hidden;
+  block-size: 8px;
+  margin-block-start: var(--space-3);
+  background: var(--surface-3);
+  border-radius: 999px;
+}
+
+.progress__bar {
+  display: block;
+  block-size: 100%;
+  background: var(--brand);
+  border-radius: inherit;
+  transition: inline-size var(--duration-slow) var(--ease-out);
+}
+
+/* Past the warning threshold the bar changes colour rather than only growing,
+   so the state is legible at a glance and without relying on width alone. */
+.progress__bar[data-state='warn'] {
+  background: var(--warning);
+}
+
+[data-motion='reduced'] .progress__bar {
+  transition: none;
+}

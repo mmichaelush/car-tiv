@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>צור קשר | CAR־טיב</title>
+    <meta name="description" content="יש הערה, שאלה או הצעת שיפור? נשמח לשמוע מכם." />
+    <meta name="theme-color" content="#0e0916" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CAR־טיב" />
+    <meta property="og:title" content="צור קשר | CAR־טיב" />
+    <meta property="og:description" content="יש הערה, שאלה או הצעת שיפור? נשמח לשמוע מכם." />
+    <meta property="og:image" content="/assets/images/logo.png" />
+    <link rel="icon" href="/assets/images/favicon.ico" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link
+      rel="preload"
+      href="/assets/fonts/rubik/rubik-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+    <script src="/theme-bootstrap.js"></script>
+    <script type="module" src="/src/app/contact.ts"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">דילוג לתוכן</a>
+    <header class="site-header" data-site-header></header>
+
+    <main id="main">
+      <section class="page-header shell">
+        <p class="eyebrow">נשמח לשמוע</p>
+        <h1>צרו איתנו קשר</h1>
+        <p>יש לכם שאלה, הצעה, דיווח על סרטון או רעיון לשיתוף פעולה? נשמח לשמוע מכם!</p>
+      </section>
+
+      <div class="shell form-layout">
+        <div class="panel">
+          <form class="form-grid" data-contact-form novalidate>
+            <div class="form-grid form-grid--2">
+              <div class="field">
+                <label for="contact-name">שם <span aria-hidden="true">*</span></label>
+                <input class="input" id="contact-name" name="name" type="text" required />
+                <span class="field-error" data-error-for="name"></span>
+              </div>
+              <div class="field">
+                <label for="contact-email">אימייל <span aria-hidden="true">*</span></label>
+                <input class="input" id="contact-email" name="email" type="email" required />
+                <span class="field-error" data-error-for="email"></span>
+              </div>
+            </div>
+
+            <div class="field">
+              <label for="contact-subject">נושא</label>
+              <input class="input" id="contact-subject" name="subject" type="text" />
+            </div>
+
+            <div class="field">
+              <label for="contact-message">ההודעה <span aria-hidden="true">*</span></label>
+              <textarea
+                class="textarea"
+                id="contact-message"
+                name="message"
+                rows="7"
+                required
+              ></textarea>
+              <span class="field-error" data-error-for="message"></span>
+            </div>
+
+            <label class="check">
+              <input type="checkbox" name="acceptedPrivacy" required />
+              קראתי ואני מאשר את <a href="/privacy/">מדיניות הפרטיות</a>
+            </label>
+            <span class="field-error" data-error-for="acceptedPrivacy"></span>
+
+            <div class="form-status" data-form-status hidden></div>
+            <button class="btn btn--primary" type="submit" data-submit>שליחה</button>
+          </form>
+        </div>
+
+        <aside>
+          <div class="panel">
+            <h2>דרכים נוספות</h2>
+            <p class="muted">אפשר גם ליצור קשר ישירות באימייל:</p>
+            <ul class="info-list" style="margin-block-start: var(--space-3)">
+              <li>
+                <a class="contact-email" href="mailto:michaelush613@gmail.com" data-contact-mailto>
+                  michaelush613@gmail.com
+                </a>
+              </li>
+              <li>סרטון שבור או פרטים שגויים? אפשר לדווח ישירות מדף הסרטון.</li>
+              <li>רוצים להציע סרטון? <a href="/add-video/">הטופס נמצא כאן</a>.</li>
+            </ul>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="site-footer" data-site-footer></footer>
+  </body>
+</html>

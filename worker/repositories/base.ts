@@ -1,0 +1,184 @@
+/**
+ * Shared repository plumbing.
+ *
+ * Rules that hold for every repository in this folder:
+ *   * SQL lives here and nowhere else in the code base.
+ *   * every value reaches the database through a binding — no interpolation.
+ *   * a D1 failure becomes a `ServiceUnavailableError`, so a route never has to
+ *     know what a `D1_ERROR` is.
+ *   * rows are mapped to the camelCase domain types from `shared/types` before
+ *     leaving the repository, so nothing above this layer sees a column name.
+ */
+
+import type { D1Database, D1Result } from '@cloudflare/workers-types';
+import { ServiceUnavailableError } from '../lib/errors.js';
+
+/** A value D1 accepts as a bound parameter. */
+export type Binding = string | number | null;
+
+/**
+ * A WHERE clause under construction.
+ *
+ * Conditions and their bindings are appended together, which makes it
+ * impossible to add a condition and forget its parameter — the classic source
+ * of "wrong number of bindings" bugs in hand-built SQL.
+ */
+export class ConditionBuilder {
+  readonly #conditions: string[] = [];
+  readonly #bindings: Binding[] = [];
+
+  /** Add `sql` with its parameters, in order. */
+  add(sql: string, ...bindings: readonly Binding[]): this {
+    this.#conditions.push(sql);
+    this.#bindings.push(...bindings);
+    return this;
+  }
+
+  /** Add only when `condition` holds. Keeps call sites free of `if` blocks. */
+  addIf(condition: boolean, sql: string, ...bindings: readonly Binding[]): this {
+    if (condition) this.add(sql, ...bindings);
+    return this;
+  }
+
+  /** `WHERE a AND b`, or an empty string when there are no conditions. */
+  whereClause(): string {
+    return this.#conditions.length === 0 ? '' : `WHERE ${this.#conditions.join('\n  AND ')}`;
+  }
+
+  bindings(): Binding[] {
+    return [...this.#bindings];
+  }
+
+  get isEmpty(): boolean {
+    return this.#conditions.length === 0;
+  }
+}
+
+/** Base class holding the database handle and the error translation. */
+export abstract class BaseRepository {
+  protected readonly db: D1Database;
+
+  constructor(db: D1Database) {
+    this.db = db;
+  }
+
+  /** Run a query returning many rows. */
+  protected async all<TRow>(sql: string, bindings: readonly Binding[] = []): Promise<TRow[]> {
+    try {
+      const statement = this.db.prepare(sql).bind(...bindings);
+      const result = await statement.all<TRow>();
+      return result.results;
+    } catch (cause) {
+      throw wrap(cause, sql);
+    }
+  }
+
+  /** Run a query returning at most one row. */
+  protected async first<TRow>(
+    sql: string,
+    bindings: readonly Binding[] = [],
+  ): Promise<TRow | null> {
+    try {
+      return await this.db
+        .prepare(sql)
+        .bind(...bindings)
+        .first<TRow>();
+    } catch (cause) {
+      throw wrap(cause, sql);
+    }
+  }
+
+  /**
+   * Run a query whose answer is a single number.
+   * The query must alias the column as `value`, e.g. `SELECT COUNT(*) AS value`.
+   */
+  protected async count(sql: string, bindings: readonly Binding[] = []): Promise<number> {
+    const row = await this.first<{ value: number }>(sql, bindings);
+    return row?.value ?? 0;
+  }
+
+  /** Run a statement for its effect. */
+  protected async run(sql: string, bindings: readonly Binding[] = []): Promise<D1Result> {
+    try {
+      return await this.db
+        .prepare(sql)
+        .bind(...bindings)
+        .run();
+    } catch (cause) {
+      throw wrap(cause, sql);
+    }
+  }
+
+  /**
+   * Run several statements as one D1 batch.
+   * D1 executes a batch inside an implicit transaction, so either all of the
+   * statements apply or none do.
+   */
+  protected async batch(
+    statements: readonly { sql: string; bindings?: readonly Binding[] }[],
+  ): Promise<void> {
+    await this.batchWithResults(statements);
+  }
+
+  /**
+   * The same, returning each statement's result.
+   *
+   * Needed wherever a mutation and its audit row must land together *and* the
+   * caller needs the row count — writing those as two separate calls means a
+   * failure between them leaves the change with no record of who made it.
+   */
+  protected async batchWithResults(
+    statements: readonly { sql: string; bindings?: readonly Binding[] }[],
+  ): Promise<D1Result[]> {
+    if (statements.length === 0) return [];
+    try {
+      return await this.db.batch(
+        statements.map((statement) =>
+          this.db.prepare(statement.sql).bind(...(statement.bindings ?? [])),
+        ),
+      );
+    } catch (cause) {
+      throw wrap(cause, statements[0]?.sql ?? '');
+    }
+  }
+}
+
+/**
+ * Translate a driver error.
+ *
+ * A UNIQUE violation is business logic and is re-thrown untouched so the
+ * calling service can turn it into a 409; anything else is an outage from the
+ * caller's point of view.
+ */
+function wrap(cause: unknown, sql: string): Error {
+  const message = cause instanceof Error ? cause.message : String(cause);
+  if (message.includes('UNIQUE constraint failed')) {
+    return cause instanceof Error ? cause : new Error(message);
+  }
+  return new ServiceUnavailableError('בסיס הנתונים אינו זמין כרגע', {
+    cause,
+    // Only the first line of the statement, so the log stays readable and no
+    // bound value can be reconstructed from it.
+    logContext: { sql: sql.split('\n')[0] },
+  });
+}
+
+/** `true` when an error is a UNIQUE constraint violation. */
+export function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('UNIQUE constraint failed');
+}
+
+/** D1 stores booleans as 0/1. */
+export const toBoolean = (value: number | null | undefined): boolean => value === 1;
+
+/**
+ * Separator used by every `group_concat` in this folder. A unit separator
+ * cannot appear in a title or a tag, so splitting it back apart is lossless.
+ */
+export const LIST_SEPARATOR = '\u001F';
+
+/** Split a `group_concat` result into a list, dropping empties. */
+export function splitList(value: string | null | undefined): string[] {
+  if (value == null || value.length === 0) return [];
+  return value.split(LIST_SEPARATOR).filter((item) => item.length > 0);
+}

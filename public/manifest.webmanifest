@@ -1,0 +1,46 @@
+{
+  "name": "CAR־טיב — מאגר סרטוני הרכב הכשר",
+  "short_name": "CAR־טיב",
+  "description": "אלפי סרטוני רכב כשרים בעברית: סקירות, טיפולים, תיקונים, בטיחות, שטח ושדרוגים.",
+  "lang": "he",
+  "dir": "rtl",
+  "start_url": "/?source=pwa",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#0e0916",
+  "theme_color": "#0e0916",
+  "categories": ["education", "lifestyle"],
+  "icons": [
+    {
+      "src": "/assets/images/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/images/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "חיפוש במאגר",
+      "url": "/search",
+      "icons": [{ "src": "/assets/images/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "הספרייה שלי",
+      "url": "/library/",
+      "icons": [{ "src": "/assets/images/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+dist
+coverage
+node_modules
+.wrangler
+public/static-data
+data/videos
+data/featured_channels.json
+build
+*.min.js
+*.min.css
+
+# Generated from the legal source documents by scripts/build-legal-pages.ts
+privacy/index.html
+terms/index.html

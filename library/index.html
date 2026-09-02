@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>הספרייה שלי | CAR־טיב</title>
+    <meta name="description" content="המועדפים, רשימת הצפייה, ההיסטוריה, הפלייליסטים והרכב שלכם." />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#0e0916" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CAR־טיב" />
+    <meta property="og:title" content="הספרייה שלי | CAR־טיב" />
+    <meta
+      property="og:description"
+      content="המועדפים, רשימת הצפייה, ההיסטוריה, הפלייליסטים והרכב שלכם."
+    />
+    <meta property="og:image" content="/assets/images/logo.png" />
+    <link rel="icon" href="/assets/images/favicon.ico" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link
+      rel="preload"
+      href="/assets/fonts/rubik/rubik-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+    <script src="/theme-bootstrap.js"></script>
+    <script type="module" src="/src/app/library.ts"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">דילוג לתוכן</a>
+    <header class="site-header" data-site-header></header>
+
+    <main id="main">
+      <section class="page-header shell">
+        <p class="eyebrow">האזור האישי</p>
+        <h1>הספרייה שלי</h1>
+        <p>
+          כל מה ששמרתם נשמר במכשיר הזה בלבד — בלי חשבון ובלי הרשמה. אפשר לייצא את הנתונים בכל רגע.
+        </p>
+      </section>
+
+      <section class="section shell">
+        <div class="tabs" role="tablist" data-library-tabs></div>
+        <div data-library-content></div>
+      </section>
+    </main>
+
+    <footer class="site-footer" data-site-footer></footer>
+  </body>
+</html>

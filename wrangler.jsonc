@@ -1,0 +1,122 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+
+  // ---------------------------------------------------------------------------
+  // CAR-טיב — Cloudflare Worker (API + static asset host).
+  //
+  // The same Worker serves the built front-end (`dist/`) and the JSON API under
+  // `/api/*`. Nothing in the browser talks to D1 directly; see docs/architecture.md.
+  //
+  // `database_id` values are placeholders on purpose. Run:
+  //     wrangler d1 create car-tiv-dev
+  //     wrangler d1 create car-tiv-staging
+  //     wrangler d1 create car-tiv
+  // and paste the returned ids here. They are not secrets.
+  // ---------------------------------------------------------------------------
+
+  "name": "car-tiv-dev",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": { "enabled": true },
+
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "html_handling": "auto-trailing-slash",
+    "not_found_handling": "404-page",
+    // The Worker runs first so it can serve /api/* and the dynamic
+    // /video/:id and /channel/:slug routes before falling back to assets.
+    "run_worker_first": ["/api/*", "/video/*", "/channel/*", "/category/*"],
+  },
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "car-tiv-dev",
+      "database_id": "REPLACE_WITH_DEV_D1_ID",
+      "migrations_dir": "migrations",
+    },
+  ],
+
+  "vars": {
+    "ENVIRONMENT": "development",
+    "APP_URL": "http://localhost:8787",
+    "STATIC_CATALOG_MODE": "false",
+    "FEATURE_ACCOUNTS": "true",
+    "FEATURE_PLAYLISTS": "true",
+    "FEATURE_MY_CAR": "true",
+    "FEATURE_RECOMMENDATIONS": "true",
+    "FEATURE_ADMIN": "true",
+  },
+
+  "env": {
+    "staging": {
+      "name": "car-tiv-staging",
+      "triggers": {
+        // Hourly link check and housekeeping. See
+        // worker/services/maintenance-service.ts.
+        "crons": ["0 * * * *"],
+      },
+      "vars": {
+        "ENVIRONMENT": "staging",
+        // MUST be the real origin this environment answers on, with no
+        // trailing slash. It is not decoration: it builds the OAuth redirect
+        // URI (which has to match Google Cloud character for character) and
+        // every absolute URL in the sitemap.
+        //
+        // A workers.dev address is `<worker>.<YOUR_ACCOUNT_SUBDOMAIN>.workers.dev`
+        // — the account subdomain is not optional, so replace the placeholder
+        // below with the URL `wrangler deploy` prints.
+        "APP_URL": "https://car-tiv-staging.REPLACE_WITH_ACCOUNT_SUBDOMAIN.workers.dev",
+        "STATIC_CATALOG_MODE": "false",
+        "FEATURE_ACCOUNTS": "true",
+        "FEATURE_PLAYLISTS": "true",
+        "FEATURE_MY_CAR": "true",
+        "FEATURE_RECOMMENDATIONS": "true",
+        "FEATURE_ADMIN": "true",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "car-tiv-staging",
+          "database_id": "REPLACE_WITH_STAGING_D1_ID",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+
+    "production": {
+      "name": "car-tiv",
+      "triggers": {
+        "crons": ["0 * * * *"],
+      },
+      "vars": {
+        "ENVIRONMENT": "production",
+        // The custom domain, once there is one — see the note on caching in
+        // docs/performance.md and the checklist in docs/deployment.md. Until
+        // then, the full workers.dev address including the account subdomain:
+        // `car-tiv.<YOUR_ACCOUNT_SUBDOMAIN>.workers.dev`.
+        //
+        // Wrong here means Google sign-in fails (the redirect URI will not
+        // match) and every URL in the sitemap points at a host that does not
+        // exist. Both fail silently in the sense that the site still loads.
+        "APP_URL": "https://REPLACE_WITH_PRODUCTION_ORIGIN",
+        "STATIC_CATALOG_MODE": "false",
+        "FEATURE_ACCOUNTS": "false",
+        "FEATURE_PLAYLISTS": "true",
+        "FEATURE_MY_CAR": "true",
+        "FEATURE_RECOMMENDATIONS": "true",
+        "FEATURE_ADMIN": "true",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "car-tiv",
+          "database_id": "REPLACE_WITH_PRODUCTION_D1_ID",
+          "migrations_dir": "migrations",
+        },
+      ],
+    },
+  },
+}

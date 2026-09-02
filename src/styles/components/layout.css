@@ -1,0 +1,581 @@
+/* ==========================================================================
+   Layout — header, hero, section headings, footer.
+   ========================================================================== */
+
+/* --------------------------------------------------------------- Header
+   Sticky, translucent, and the same on every page. Built by
+   `src/ui/layout/header.ts` so a nav change is one edit. */
+
+.site-header {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: var(--z-header);
+  block-size: var(--header-height);
+  background: var(--header-bg);
+  backdrop-filter: blur(14px) saturate(140%);
+  border-block-end: 1px solid var(--line);
+}
+
+.site-header__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  block-size: 100%;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  flex: none;
+}
+
+.brand img {
+  inline-size: 34px;
+  block-size: 34px;
+  object-fit: contain;
+}
+
+.brand__mark {
+  color: var(--brand);
+}
+
+.main-nav {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.main-nav a {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    background-color var(--duration-fast) var(--ease-out);
+}
+
+.main-nav a:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.main-nav a[aria-current='page'] {
+  color: var(--brand);
+  background: var(--brand-soft);
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+
+/* The header search collapses to an icon below the desktop breakpoint. */
+.header-search {
+  flex: 1;
+  max-inline-size: 420px;
+}
+
+.header-search .search {
+  box-shadow: none;
+  background: var(--surface-2);
+  padding-block: 0;
+}
+
+.header-search .search input {
+  min-height: calc(var(--control-height) - 4px);
+}
+
+.menu-toggle {
+  display: none;
+}
+
+@media (max-width: 900px) {
+  .header-search {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .menu-toggle {
+    display: inline-grid;
+  }
+
+  .main-nav {
+    display: none;
+    position: absolute;
+    inset-block-start: var(--header-height);
+    inset-inline: var(--space-3);
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    padding: var(--space-2);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .main-nav.is-open {
+    display: flex;
+  }
+
+  .main-nav a {
+    padding: var(--space-3);
+  }
+}
+
+/* ------------------------------------------------------------------ Hero */
+
+.hero {
+  position: relative;
+  overflow: hidden;
+  background: var(--hero-bg);
+  text-align: center;
+  padding-block: clamp(3rem, 8vw, 6rem) clamp(2.5rem, 6vw, 4.5rem);
+}
+
+/* A soft ring behind the headline. Decorative only. */
+.hero::before {
+  content: '';
+  position: absolute;
+  inset-block-start: -20%;
+  inset-inline-start: 50%;
+  translate: -50% 0;
+  inline-size: min(760px, 120vw);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 1px solid var(--hero-glow);
+  box-shadow:
+    0 0 120px var(--hero-glow),
+    inset 0 0 120px var(--hero-glow);
+  pointer-events: none;
+}
+
+.hero > * {
+  position: relative;
+}
+
+.hero h1 {
+  font-size: var(--text-display);
+  letter-spacing: -0.03em;
+  margin-block: var(--space-3) var(--space-4);
+}
+
+.hero h1 span {
+  color: var(--brand);
+}
+
+.hero__lede {
+  max-inline-size: 42rem;
+  margin-inline: auto;
+  color: var(--text-muted);
+  font-size: var(--text-lg);
+  line-height: var(--leading-relaxed);
+}
+
+.hero .search {
+  max-inline-size: 44rem;
+  margin: var(--space-6) auto var(--space-4);
+}
+
+.hero__stats {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+.hero__stats strong {
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A short hero for interior pages. */
+.page-header {
+  padding-block: clamp(2rem, 5vw, 3.5rem) var(--space-5);
+}
+
+.page-header h1 {
+  font-size: var(--text-3xl);
+  margin-block: var(--space-2);
+}
+
+.page-header p {
+  max-inline-size: 46rem;
+  color: var(--text-muted);
+  line-height: var(--leading-relaxed);
+}
+
+/* -------------------------------------------------------- Section heading */
+
+.section {
+  padding-block: clamp(2rem, 5vw, 3.5rem);
+}
+
+.section-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-block-end: var(--space-5);
+  flex-wrap: wrap;
+}
+
+.section-heading h2 {
+  font-size: var(--text-2xl);
+  margin-block-start: var(--space-1);
+}
+
+.section-heading p {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  margin-block-start: var(--space-1);
+}
+
+/* ------------------------------------------------------------ Breadcrumbs */
+
+.breadcrumbs {
+  margin-block-end: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
+
+.breadcrumbs ol {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* The separator is a pseudo-element, so it is never read aloud as content. */
+.breadcrumbs li + li::before {
+  content: '/';
+  margin-inline-end: var(--space-2);
+  color: var(--text-subtle);
+}
+
+.breadcrumbs a:hover {
+  color: var(--brand);
+}
+
+.breadcrumbs [aria-current='page'] {
+  color: var(--text);
+  font-weight: 500;
+  /* A long video title must not push the trail into three lines. */
+  display: inline-block;
+  max-inline-size: 32ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.section-heading--center {
+  justify-content: center;
+  text-align: center;
+}
+
+.section-footer-action {
+  margin-block-start: var(--space-5);
+  text-align: center;
+}
+
+/* The Netfree attribution, in the hero and above the channel rail. The mark
+   sits on the text baseline so the sentence reads as one line. */
+.netfree-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35em;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.netfree-link img {
+  inline-size: 1.05em;
+  block-size: 1.05em;
+  object-fit: contain;
+}
+
+/* --------------------------------------------------------------- Carousel
+   A scroll container with two paging buttons. The buttons are hidden until
+   the rail actually overflows, so a short list looks like a plain row. */
+
+.carousel {
+  position: relative;
+}
+
+.carousel__viewport {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+  padding-block-end: var(--space-2);
+}
+
+.carousel__viewport::-webkit-scrollbar {
+  display: none;
+}
+
+.carousel__viewport:focus-visible {
+  outline: 2px solid var(--focus-ring, var(--brand));
+  outline-offset: 3px;
+  border-radius: var(--card-radius);
+}
+
+.channel-rail {
+  display: flex;
+  gap: var(--grid-gap);
+}
+
+.channel-rail > * {
+  flex: 0 0 clamp(240px, 78vw, 300px);
+  scroll-snap-align: start;
+}
+
+.carousel__nav {
+  position: absolute;
+  inset-block-start: calc(50% - 22px);
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--brand);
+  box-shadow: var(--shadow-md);
+  transition: opacity var(--duration-base) var(--ease-out);
+}
+
+.carousel__nav--start {
+  inset-inline-start: calc(var(--space-3) * -1);
+}
+
+.carousel__nav--end {
+  inset-inline-end: calc(var(--space-3) * -1);
+}
+
+.carousel__nav:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.carousel__nav:not(:disabled):hover {
+  border-color: var(--brand);
+}
+
+/* Touch devices scroll the rail directly; the buttons only take up room. */
+@media (hover: none) {
+  .carousel__nav {
+    display: none;
+  }
+}
+
+/* ---------------------------------------------------------------- Footer */
+
+.site-footer {
+  margin-block-start: var(--space-8);
+  padding-block: var(--space-7) var(--space-6);
+  border-block-start: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.site-footer__grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.4fr) repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-6);
+}
+
+.site-footer h3 {
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-subtle);
+  margin-block-end: var(--space-3);
+}
+
+.site-footer nav {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.site-footer a {
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.site-footer a:hover {
+  color: var(--brand);
+}
+
+.site-footer__about {
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  max-inline-size: 32rem;
+}
+
+.site-footer__bottom {
+  display: flex;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-block-start: var(--space-6);
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--line);
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+/* ---------------------------------------------------------- Back to top */
+
+.back-to-top {
+  position: fixed;
+  z-index: var(--z-sticky);
+  inset-block-end: var(--space-5);
+  inset-inline-start: var(--space-5);
+  inline-size: 46px;
+  block-size: 46px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--brand);
+  color: var(--on-brand);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  translate: 0 12px;
+  pointer-events: none;
+  transition:
+    opacity var(--duration-base) var(--ease-out),
+    translate var(--duration-base) var(--ease-out);
+}
+
+.back-to-top.is-visible {
+  opacity: 1;
+  translate: 0 0;
+  pointer-events: auto;
+}
+
+/* ------------------------------------------------------------ Highlight
+   The forum call-out and similar full-width panels. */
+
+.panel-highlight {
+  padding: clamp(2rem, 5vw, 3.5rem);
+  border-radius: var(--radius-2xl);
+  background: linear-gradient(135deg, var(--surface-3), var(--surface));
+  border: 1px solid var(--line);
+  text-align: center;
+}
+
+.panel-highlight h2 {
+  font-size: var(--text-2xl);
+  margin-block: var(--space-2) var(--space-3);
+}
+
+.panel-highlight p {
+  max-inline-size: 40rem;
+  margin-inline: auto;
+  color: var(--text-muted);
+  margin-block-end: var(--space-5);
+}
+
+/* ---------------------------------------------------------- Account menu
+   The header's sign-in link, or the avatar and its menu. Built on a native
+   <details>, so it opens with a keyboard and needs no state of its own. */
+
+.account-slot {
+  display: flex;
+  align-items: center;
+}
+
+.account-menu {
+  position: relative;
+}
+
+.account-menu > summary {
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+  list-style: none;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+}
+
+.account-menu > summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-menu > summary:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+.account-menu__avatar {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: cover;
+}
+
+.account-menu__initial {
+  font-weight: 600;
+  color: var(--brand);
+}
+
+.account-menu__panel {
+  position: absolute;
+  inset-block-start: calc(100% + var(--space-2));
+  inset-inline-end: 0;
+  z-index: 40;
+  min-inline-size: 220px;
+  padding: var(--space-3);
+  display: grid;
+  gap: var(--space-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md, 12px);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.account-menu__name {
+  font-weight: 600;
+}
+
+.account-menu__email {
+  color: var(--text-muted);
+  font-size: var(--text-xs);
+  margin-block-end: var(--space-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-menu__panel a,
+.account-menu__panel button {
+  text-align: start;
+  padding: var(--space-2);
+  border-radius: var(--radius-sm, 8px);
+  font-size: var(--text-sm);
+}
+
+.account-menu__panel a:hover,
+.account-menu__panel button:hover {
+  background: var(--surface-2);
+  color: var(--brand);
+}

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    /*
+     * Tests exercise the Worker, so they type-check against the Cloudflare
+     * runtime library — the same one `tsconfig.worker.json` uses. Node's global
+     * library is deliberately NOT loaded here: `@types/node` and
+     * `@cloudflare/workers-types` both declare `Request`, `Response` and
+     * `ReadableStream`, and mixing them produces incompatible duplicates.
+     *
+     * Node built-ins are still fully typed, because an explicit
+     * `import … from 'node:fs/promises'` resolves through `@types/node`
+     * regardless of what is listed here. Node *globals* (`process`, `Buffer`)
+     * are not available — tests should not need them.
+     */
+    "lib": ["ES2023"],
+    "types": ["@cloudflare/workers-types"],
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.test.tsbuildinfo"
+  },
+  "include": ["tests/**/*.ts", "shared/**/*.ts", "worker/**/*.ts"],
+  /* UI tests need the DOM library, which conflicts with the Workers one — see tsconfig.test-ui.json. */
+  "exclude": ["tests/ui/**"]
+}

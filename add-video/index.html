@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>הצעת סרטון | CAR־טיב</title>
+    <meta
+      name="description"
+      content="מצאתם סרטון רכב כשר ואיכותי? שלחו אותו אלינו ונשקול להוסיף אותו למאגר."
+    />
+    <meta name="theme-color" content="#0e0916" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CAR־טיב" />
+    <meta property="og:title" content="הצעת סרטון | CAR־טיב" />
+    <meta
+      property="og:description"
+      content="מצאתם סרטון רכב כשר ואיכותי? שלחו אותו אלינו ונשקול להוסיף אותו למאגר."
+    />
+    <meta property="og:image" content="/assets/images/logo.png" />
+    <link rel="icon" href="/assets/images/favicon.ico" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link
+      rel="preload"
+      href="/assets/fonts/rubik/rubik-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <link rel="preconnect" href="https://i.ytimg.com" crossorigin />
+    <script src="/theme-bootstrap.js"></script>
+    <script type="module" src="/src/app/add-video.ts"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">דילוג לתוכן</a>
+    <header class="site-header" data-site-header></header>
+
+    <main id="main">
+      <section class="page-header shell">
+        <p class="eyebrow">קהילה</p>
+        <h1>הוספת סרטון למאגר</h1>
+        <p>
+          יש לך סרטון מתאים שמומלץ להוסיף לאתר? מלא את הטופס עם פרטי הסרטון ונשתדל בעז"ה בל"נ
+          להוסיפו למאגר.
+        </p>
+      </section>
+
+      <div class="shell form-layout">
+        <div>
+          <div class="panel" id="duplicate-check">
+            <h2>בדיקה אם הסרטון כבר קיים במאגר</h2>
+            <p class="muted">אפשר לבדוק לפני השליחה אם הסרטון כבר נמצא במאגר.</p>
+            <form class="form-grid" data-duplicate-form style="margin-block-start: var(--space-4)">
+              <div class="field">
+                <label for="check-url">קישור או מזהה של סרטון YouTube</label>
+                <input
+                  class="input"
+                  id="check-url"
+                  name="url"
+                  type="text"
+                  placeholder="https://www.youtube.com/watch?v=…"
+                  required
+                />
+              </div>
+              <button class="btn btn--secondary" type="submit">בדיקה</button>
+            </form>
+            <div class="form-status" data-check-result hidden></div>
+          </div>
+
+          <div class="panel">
+            <h2>שליחת הצעה</h2>
+            <form class="form-grid" data-submission-form novalidate>
+              <div class="field">
+                <label for="submit-url">קישור לסרטון <span aria-hidden="true">*</span></label>
+                <input class="input" id="submit-url" name="url" type="text" required />
+                <span class="field-error" data-error-for="url"></span>
+              </div>
+
+              <div class="form-grid form-grid--2">
+                <div class="field">
+                  <label for="submit-category">קטגוריה מוצעת</label>
+                  <select class="select" id="submit-category" name="category" data-category-select>
+                    <option value="">לא בטוח</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="submit-name">השם שלכם</label>
+                  <input class="input" id="submit-name" name="name" type="text" />
+                </div>
+              </div>
+
+              <div class="field">
+                <label for="submit-email">אימייל (לא חובה)</label>
+                <input class="input" id="submit-email" name="email" type="email" />
+                <span class="hint">נשתמש בו רק אם נצטרך לחזור אליכם בנוגע להצעה.</span>
+                <span class="field-error" data-error-for="email"></span>
+              </div>
+
+              <div class="field">
+                <label for="submit-message">משהו שכדאי שנדע?</label>
+                <textarea class="textarea" id="submit-message" name="message" rows="4"></textarea>
+              </div>
+
+              <div class="form-status" data-form-status hidden></div>
+              <button class="btn btn--primary" type="submit" data-submit>שליחת ההצעה</button>
+            </form>
+          </div>
+        </div>
+
+        <aside>
+          <div class="panel">
+            <h2>מה אנחנו מחפשים</h2>
+            <ul class="info-list">
+              <li>תוכן רכב איכותי ומכבד, שמתאים לכל המשפחה.</li>
+              <li>עדיפות לעברית, אבל גם ערוצי חוץ מצוינים מתקבלים בברכה.</li>
+              <li>סרטונים שמלמדים משהו: טיפול, תיקון, סקירה או בטיחות.</li>
+              <li>ערוץ שלם שכדאי להכיר? כתבו לנו בהודעה.</li>
+            </ul>
+          </div>
+
+          <!--
+            The Google Form the site used before this one. Kept as a fallback
+            so a visitor is never stuck: it is the path that works even if our
+            own API is down, and the page offers it automatically when a
+            submission fails.
+          -->
+          <div class="panel" data-legacy-form>
+            <h2>הטופס הישן</h2>
+            <p class="muted">
+              אם השליחה כאן לא עובדת, אפשר תמיד להשתמש בטופס הקודם שלנו ב־Google Forms.
+            </p>
+            <p style="margin-block-start: var(--space-4)">
+              <a
+                class="btn btn--secondary"
+                href="https://docs.google.com/forms/d/e/1FAIpQLSdkslgAE2e__pNTxJ-6kxXu8ksXnV7N5umOzy2s6vrOy392eQ/viewform"
+                target="_blank"
+                rel="noopener noreferrer"
+                >פתיחת הטופס הישן</a
+              >
+            </p>
+          </div>
+        </aside>
+      </div>
+    </main>
+
+    <footer class="site-footer" data-site-footer></footer>
+  </body>
+</html>

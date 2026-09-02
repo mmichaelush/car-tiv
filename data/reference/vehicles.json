@@ -1,0 +1,609 @@
+{
+  "$comment": [
+    "Seed reference data for manufacturers and models.",
+    "Used by scripts/build-catalog.ts to tag existing videos with a vehicle, and",
+    "seeded into the `manufacturers` / `vehicle_models` tables. Editors extend it",
+    "from the admin afterwards; this file is only the starting point.",
+    "",
+    "`aliases` are matched against normalised text (shared/core/text.ts), so they",
+    "should be written without punctuation. Order does not matter."
+  ],
+  "manufacturers": [
+    {
+      "slug": "toyota",
+      "name": "Toyota",
+      "nameHe": "טויוטה",
+      "aliases": ["toyota", "טויוטה", "טויוטא"],
+      "models": [
+        "Corolla:קורולה",
+        "Yaris:יאריס",
+        "RAV4:ראב4|רav4|rav 4",
+        "C-HR:chr|צי אייצ אר",
+        "Camry:קאמרי",
+        "Auris:אוריס",
+        "Hilux:היילקס",
+        "Land Cruiser:לנד קרוזר",
+        "Prius:פריוס",
+        "Supra:סופרה",
+        "Aygo:אייגו",
+        "Highlander:היילנדר",
+        "bZ4X:bz4x"
+      ]
+    },
+    {
+      "slug": "hyundai",
+      "name": "Hyundai",
+      "nameHe": "יונדאי",
+      "aliases": ["hyundai", "יונדאי", "הyundai"],
+      "models": [
+        "i10:אי 10",
+        "i20:אי 20",
+        "i30:אי 30",
+        "i35:אי 35",
+        "i40:אי 40",
+        "Tucson:טוסון",
+        "Santa Fe:סנטה פה",
+        "Kona:קונה",
+        "Ioniq:איוניק",
+        "Elantra:אלנטרה",
+        "Accent:אקסנט",
+        "Getz:גטס",
+        "Bayon:באיון",
+        "Staria:סטריה"
+      ]
+    },
+    {
+      "slug": "kia",
+      "name": "Kia",
+      "nameHe": "קיה",
+      "aliases": ["kia", "קיה"],
+      "models": [
+        "Picanto:פיקנטו",
+        "Rio:ריו",
+        "Ceed:סיד",
+        "Sportage:ספורטאז",
+        "Sorento:סורנטו",
+        "Niro:נירו",
+        "EV6:אי וי 6",
+        "Stonic:סטוניק",
+        "Seltos:סלטוס",
+        "Carnival:קרניבל",
+        "Optima:אופטימה",
+        "Stinger:סטינגר"
+      ]
+    },
+    {
+      "slug": "mazda",
+      "name": "Mazda",
+      "nameHe": "מאזדה",
+      "aliases": ["mazda", "מאזדה", "מזדה"],
+      "models": [
+        "Mazda2:מאזדה 2",
+        "Mazda3:מאזדה 3",
+        "Mazda6:מאזדה 6",
+        "CX-3:cx3",
+        "CX-30:cx30",
+        "CX-5:cx5",
+        "CX-60:cx60",
+        "MX-5:mx5|מיאטה"
+      ]
+    },
+    {
+      "slug": "skoda",
+      "name": "Skoda",
+      "nameHe": "סקודה",
+      "aliases": ["skoda", "סקודה", "škoda"],
+      "models": [
+        "Fabia:פאביה",
+        "Octavia:אוקטביה",
+        "Superb:סופרב",
+        "Kamiq:קאמיק",
+        "Karoq:קארוק",
+        "Kodiaq:קודיאק",
+        "Scala:סקאלה",
+        "Enyaq:אניאק"
+      ]
+    },
+    {
+      "slug": "volkswagen",
+      "name": "Volkswagen",
+      "nameHe": "פולקסווגן",
+      "aliases": ["volkswagen", "vw", "פולקסווגן", "פולקסוואגן"],
+      "models": [
+        "Polo:פולו",
+        "Golf:גולף",
+        "Passat:פאסאט",
+        "Tiguan:טיגואן",
+        "T-Roc:troc",
+        "T-Cross:tcross",
+        "Touareg:טוארג",
+        "ID.3:id3",
+        "ID.4:id4",
+        "Arteon:ארטאון",
+        "Caddy:קאדי",
+        "Transporter:טרנספורטר"
+      ]
+    },
+    {
+      "slug": "seat",
+      "name": "SEAT",
+      "nameHe": "סיאט",
+      "aliases": ["seat", "סיאט", "cupra", "קופרה"],
+      "models": [
+        "Ibiza:איביזה",
+        "Leon:לאון",
+        "Arona:ארונה",
+        "Ateca:אטקה",
+        "Tarraco:טאראקו",
+        "Formentor:פורמנטור",
+        "Born:בורן"
+      ]
+    },
+    {
+      "slug": "renault",
+      "name": "Renault",
+      "nameHe": "רנו",
+      "aliases": ["renault", "רנו"],
+      "models": [
+        "Clio:קליאו",
+        "Megane:מגאן",
+        "Captur:קפצור",
+        "Kadjar:קדגאר",
+        "Scenic:סניק",
+        "Zoe:זואי",
+        "Austral:אוסטרל",
+        "Arkana:ארקנה",
+        "Kangoo:קנגו",
+        "Duster:דאסטר"
+      ]
+    },
+    {
+      "slug": "nissan",
+      "name": "Nissan",
+      "nameHe": "ניסאן",
+      "aliases": ["nissan", "ניסאן", "ניסן"],
+      "models": [
+        "Micra:מיקרה",
+        "Juke:גוק",
+        "Qashqai:קשקאי",
+        "X-Trail:אקסטרייל",
+        "Leaf:ליף",
+        "Ariya:אריה",
+        "Navara:נבארה",
+        "Patrol:פטרול",
+        "GT-R:gtr"
+      ]
+    },
+    {
+      "slug": "honda",
+      "name": "Honda",
+      "nameHe": "הונדה",
+      "aliases": ["honda", "הונדה"],
+      "models": ["Civic:סיוויק", "Jazz:גז", "HR-V:hrv", "CR-V:crv", "Accord:אקורד", "e:Ny1:eny1"]
+    },
+    {
+      "slug": "mitsubishi",
+      "name": "Mitsubishi",
+      "nameHe": "מיצובישי",
+      "aliases": ["mitsubishi", "מיצובישי"],
+      "models": [
+        "Space Star:ספייס סטאר",
+        "ASX:asx",
+        "Outlander:אאוטלנדר",
+        "Eclipse Cross:אקליפס קרוס",
+        "L200:אל 200",
+        "Pajero:פגרו"
+      ]
+    },
+    {
+      "slug": "suzuki",
+      "name": "Suzuki",
+      "nameHe": "סוזוקי",
+      "aliases": ["suzuki", "סוזוקי"],
+      "models": [
+        "Swift:סוויפט",
+        "Baleno:באלנו",
+        "Vitara:ויטארה",
+        "S-Cross:scross",
+        "Jimny:גימני",
+        "Ignis:איגניס"
+      ]
+    },
+    {
+      "slug": "ford",
+      "name": "Ford",
+      "nameHe": "פורד",
+      "aliases": ["ford", "פורד"],
+      "models": [
+        "Fiesta:פיאסטה",
+        "Focus:פוקוס",
+        "Puma:פומה",
+        "Kuga:קוגה",
+        "Explorer:אקספלורר",
+        "Mustang:מוסטנג",
+        "Ranger:ריינגר",
+        "Transit:טרנזיט",
+        "F-150:f150"
+      ]
+    },
+    {
+      "slug": "chevrolet",
+      "name": "Chevrolet",
+      "nameHe": "שברולט",
+      "aliases": ["chevrolet", "chevy", "שברולט"],
+      "models": [
+        "Spark:ספארק",
+        "Aveo:אוואו",
+        "Cruze:קרוז",
+        "Malibu:מאליבו",
+        "Camaro:קאמארו",
+        "Corvette:קורבט",
+        "Silverado:סילברדו",
+        "Traverse:טראוורס"
+      ]
+    },
+    {
+      "slug": "bmw",
+      "name": "BMW",
+      "nameHe": "ב.מ.וו",
+      "aliases": ["bmw", "במוו", "ב מ וו"],
+      "models": [
+        "Series 1:סדרה 1",
+        "Series 3:סדרה 3",
+        "Series 5:סדרה 5",
+        "Series 7:סדרה 7",
+        "X1:אקס1",
+        "X3:אקס3",
+        "X5:אקס5",
+        "i3:איי3",
+        "i4:איי4",
+        "iX:איקס",
+        "M3:אמ3",
+        "M5:אמ5"
+      ]
+    },
+    {
+      "slug": "mercedes",
+      "name": "Mercedes-Benz",
+      "nameHe": "מרצדס",
+      "aliases": ["mercedes", "benz", "מרצדס", "מרסדס"],
+      "models": [
+        "A-Class:אי קלאס",
+        "C-Class:סי קלאס",
+        "E-Class:אי קלאס",
+        "S-Class:אס קלאס",
+        "GLA:gla",
+        "GLC:glc",
+        "GLE:gle",
+        "EQS:eqs",
+        "EQE:eqe",
+        "Sprinter:ספרינטר",
+        "Vito:ויטו",
+        "G-Class:גי קלאס|גלנדוואגן"
+      ]
+    },
+    {
+      "slug": "audi",
+      "name": "Audi",
+      "nameHe": "אאודי",
+      "aliases": ["audi", "אאודי", "אודי"],
+      "models": [
+        "A1:איי1",
+        "A3:איי3",
+        "A4:איי4",
+        "A6:איי6",
+        "A8:איי8",
+        "Q2:קיו2",
+        "Q3:קיו3",
+        "Q5:קיו5",
+        "Q7:קיו7",
+        "Q8:קיו8",
+        "e-tron:איטרון",
+        "RS3:rs3",
+        "TT:tt"
+      ]
+    },
+    {
+      "slug": "peugeot",
+      "name": "Peugeot",
+      "nameHe": "פיג'ו",
+      "aliases": ["peugeot", "פיגו", "פיזו"],
+      "models": [
+        "108:108",
+        "208:208",
+        "308:308",
+        "2008:2008",
+        "3008:3008",
+        "5008:5008",
+        "Partner:פרטנר",
+        "Rifter:ריפטר"
+      ]
+    },
+    {
+      "slug": "citroen",
+      "name": "Citroën",
+      "nameHe": "סיטרואן",
+      "aliases": ["citroen", "citroën", "סיטרואן"],
+      "models": [
+        "C1:סי1",
+        "C3:סי3",
+        "C4:סי4",
+        "C5 Aircross:סי5 אירקרוס",
+        "Berlingo:ברלינגו",
+        "Ami:אמי"
+      ]
+    },
+    {
+      "slug": "opel",
+      "name": "Opel",
+      "nameHe": "אופל",
+      "aliases": ["opel", "אופל"],
+      "models": [
+        "Corsa:קורסה",
+        "Astra:אסטרה",
+        "Mokka:מוקה",
+        "Crossland:קרוסלנד",
+        "Grandland:גרנדלנד",
+        "Combo:קומבו"
+      ]
+    },
+    {
+      "slug": "fiat",
+      "name": "Fiat",
+      "nameHe": "פיאט",
+      "aliases": ["fiat", "פיאט"],
+      "models": ["500:500", "Panda:פנדה", "Tipo:טיפו", "Doblo:דובלו", "Ducato:דוקאטו"]
+    },
+    {
+      "slug": "alfa-romeo",
+      "name": "Alfa Romeo",
+      "nameHe": "אלפא רומאו",
+      "aliases": ["alfa romeo", "alfaromeo", "אלפא רומאו", "אלפא"],
+      "models": ["Giulia:גוליה", "Stelvio:סטלביו", "Tonale:טונאלה", "Giulietta:גוליטה"]
+    },
+    {
+      "slug": "volvo",
+      "name": "Volvo",
+      "nameHe": "וולוו",
+      "aliases": ["volvo", "וולוו", "וולבו"],
+      "models": [
+        "XC40:xc40",
+        "XC60:xc60",
+        "XC90:xc90",
+        "S60:s60",
+        "V60:v60",
+        "EX30:ex30",
+        "C40:c40"
+      ]
+    },
+    {
+      "slug": "subaru",
+      "name": "Subaru",
+      "nameHe": "סובארו",
+      "aliases": ["subaru", "סובארו"],
+      "models": [
+        "Impreza:אימפרזה",
+        "Forester:פורסטר",
+        "Outback:אאוטבק",
+        "XV:אקס וי",
+        "BRZ:brz",
+        "WRX:wrx"
+      ]
+    },
+    {
+      "slug": "jeep",
+      "name": "Jeep",
+      "nameHe": "ג'יפ",
+      "aliases": ["jeep", "גיפ"],
+      "models": [
+        "Wrangler:רנגלר",
+        "Grand Cherokee:גרנד צירוקי",
+        "Cherokee:צירוקי",
+        "Compass:קומפאס",
+        "Renegade:רנגייד",
+        "Avenger:אוונגר"
+      ]
+    },
+    {
+      "slug": "tesla",
+      "name": "Tesla",
+      "nameHe": "טסלה",
+      "aliases": ["tesla", "טסלה"],
+      "models": [
+        "Model 3:מודל 3",
+        "Model Y:מודל y",
+        "Model S:מודל s",
+        "Model X:מודל x",
+        "Cybertruck:סייברטראק"
+      ]
+    },
+    {
+      "slug": "byd",
+      "name": "BYD",
+      "nameHe": "ביי די",
+      "aliases": ["byd", "ביי די"],
+      "models": ["Atto 3:אטו 3", "Dolphin:דולפין", "Seal:סיל", "Han:האן", "Song:סונג"]
+    },
+    {
+      "slug": "chery",
+      "name": "Chery",
+      "nameHe": "צ'רי",
+      "aliases": ["chery", "צרי", "omoda", "אומודה", "jaecoo", "גאקו"],
+      "models": ["Tiggo 7:טיגו 7", "Tiggo 8:טיגו 8", "Omoda 5:אומודה 5", "Jaecoo 7:גאקו 7"]
+    },
+    {
+      "slug": "geely",
+      "name": "Geely",
+      "nameHe": "ג'ילי",
+      "aliases": ["geely", "גילי"],
+      "models": ["Geometry C:גאומטרי סי", "Coolray:קולריי", "Atlas:אטלס"]
+    },
+    {
+      "slug": "mg",
+      "name": "MG",
+      "nameHe": "אם ג'י",
+      "aliases": ["mg", "אם גי"],
+      "models": ["ZS:zs", "HS:hs", "MG4:mg4", "MG5:mg5", "Marvel R:מארוול אר"]
+    },
+    {
+      "slug": "dacia",
+      "name": "Dacia",
+      "nameHe": "דאצ'יה",
+      "aliases": ["dacia", "דאציה"],
+      "models": ["Sandero:סנדרו", "Duster:דאסטר", "Jogger:גוגר", "Spring:ספרינג"]
+    },
+    {
+      "slug": "porsche",
+      "name": "Porsche",
+      "nameHe": "פורשה",
+      "aliases": ["porsche", "פורשה"],
+      "models": [
+        "911:911",
+        "Cayenne:קאיין",
+        "Macan:מקאן",
+        "Taycan:טייקן",
+        "Panamera:פנמרה",
+        "Boxster:בוקסטר"
+      ]
+    },
+    {
+      "slug": "land-rover",
+      "name": "Land Rover",
+      "nameHe": "לנד רובר",
+      "aliases": ["land rover", "landrover", "לנד רובר", "range rover", "ריינג רובר"],
+      "models": [
+        "Defender:דיפנדר",
+        "Discovery:דיסקברי",
+        "Range Rover Evoque:איווק",
+        "Range Rover Sport:ריינג רובר ספורט",
+        "Velar:ולאר"
+      ]
+    },
+    {
+      "slug": "lexus",
+      "name": "Lexus",
+      "nameHe": "לקסוס",
+      "aliases": ["lexus", "לקסוס"],
+      "models": ["UX:ux", "NX:nx", "RX:rx", "ES:es", "LS:ls", "LC:lc"]
+    },
+    {
+      "slug": "mini",
+      "name": "MINI",
+      "nameHe": "מיני",
+      "aliases": ["mini cooper", "מיני קופר"],
+      "models": ["Cooper:קופר", "Countryman:קאנטרימן", "Clubman:קלאבמן"]
+    },
+    {
+      "slug": "ds",
+      "name": "DS Automobiles",
+      "nameHe": "די אס",
+      "aliases": ["ds automobiles", "די אס"],
+      "models": ["DS3:ds3", "DS4:ds4", "DS7:ds7"]
+    },
+    {
+      "slug": "jaguar",
+      "name": "Jaguar",
+      "nameHe": "יגואר",
+      "aliases": ["jaguar", "יגואר"],
+      "models": ["F-Pace:fpace", "E-Pace:epace", "I-Pace:ipace", "XF:xf", "F-Type:ftype"]
+    },
+    {
+      "slug": "ferrari",
+      "name": "Ferrari",
+      "nameHe": "פרארי",
+      "aliases": ["ferrari", "פרארי"],
+      "models": ["488:488", "F8:f8", "SF90:sf90", "Roma:רומא", "296:296"]
+    },
+    {
+      "slug": "lamborghini",
+      "name": "Lamborghini",
+      "nameHe": "למבורגיני",
+      "aliases": ["lamborghini", "למבורגיני"],
+      "models": ["Huracan:הוראקן", "Aventador:אוונטדור", "Urus:אורוס", "Revuelto:רבואלטו"]
+    },
+    {
+      "slug": "maserati",
+      "name": "Maserati",
+      "nameHe": "מזראטי",
+      "aliases": ["maserati", "מזראטי"],
+      "models": ["Ghibli:גיבלי", "Levante:לבנטה", "MC20:mc20", "Grecale:גרקאלה"]
+    },
+    {
+      "slug": "bentley",
+      "name": "Bentley",
+      "nameHe": "בנטלי",
+      "aliases": ["bentley", "בנטלי"],
+      "models": ["Continental GT:קונטיננטל", "Bentayga:בנטייגה", "Flying Spur:פלייינג ספר"]
+    },
+    {
+      "slug": "rolls-royce",
+      "name": "Rolls-Royce",
+      "nameHe": "רולס רויס",
+      "aliases": ["rolls royce", "rollsroyce", "רולס רויס"],
+      "models": ["Ghost:גוסט", "Phantom:פנטום", "Cullinan:קולינן", "Spectre:ספקטר"]
+    },
+    {
+      "slug": "aston-martin",
+      "name": "Aston Martin",
+      "nameHe": "אסטון מרטין",
+      "aliases": ["aston martin", "אסטון מרטין"],
+      "models": ["DB11:db11", "DB12:db12", "Vantage:ונטאז", "DBX:dbx"]
+    },
+    {
+      "slug": "mclaren",
+      "name": "McLaren",
+      "nameHe": "מקלארן",
+      "aliases": ["mclaren", "מקלארן"],
+      "models": ["720S:720s", "765LT:765lt", "Artura:ארטורה"]
+    },
+    {
+      "slug": "cadillac",
+      "name": "Cadillac",
+      "nameHe": "קאדילק",
+      "aliases": ["cadillac", "קאדילק"],
+      "models": ["Escalade:אסקלייד", "CT5:ct5", "Lyriq:ליריק"]
+    },
+    {
+      "slug": "dodge",
+      "name": "Dodge",
+      "nameHe": "דודג'",
+      "aliases": ["dodge", "דודג"],
+      "models": ["Challenger:צלנגר", "Charger:צארגר", "Durango:דוראנגו", "RAM 1500:ראם 1500"]
+    },
+    {
+      "slug": "gmc",
+      "name": "GMC",
+      "nameHe": "ג'י אם סי",
+      "aliases": ["gmc", "גי אם סי"],
+      "models": ["Sierra:סיירה", "Yukon:יוקון", "Hummer EV:האמר"]
+    },
+    {
+      "slug": "isuzu",
+      "name": "Isuzu",
+      "nameHe": "איסוזו",
+      "aliases": ["isuzu", "איסוזו"],
+      "models": ["D-Max:dmax", "MU-X:mux"]
+    },
+    {
+      "slug": "great-wall",
+      "name": "Great Wall",
+      "nameHe": "גרייט וול",
+      "aliases": ["great wall", "gwm", "haval", "האוול", "גרייט וול"],
+      "models": ["Haval H6:האוול h6", "Haval Jolion:גוליון", "Ora:אורה"]
+    },
+    {
+      "slug": "polestar",
+      "name": "Polestar",
+      "nameHe": "פולסטאר",
+      "aliases": ["polestar", "פולסטאר"],
+      "models": ["Polestar 2:פולסטאר 2", "Polestar 3:פולסטאר 3"]
+    },
+    {
+      "slug": "smart",
+      "name": "smart",
+      "nameHe": "סמארט",
+      "aliases": ["smart fortwo", "סמארט"],
+      "models": ["ForTwo:פורטו", "#1:סמארט 1"]
+    }
+  ]
+}

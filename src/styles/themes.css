@@ -1,0 +1,348 @@
+/* ==========================================================================
+   Themes
+   --------------------------------------------------------------------------
+   Each theme redefines the *semantic* tokens only. Components never mention a
+   theme, so adding one is this file plus an entry in `src/features/theme`.
+
+   `data-theme` is written on <html> by `src/app/theme-bootstrap.ts` before the
+   page paints, which is what prevents the flash of the wrong colours.
+   `system` resolves to purple (dark) or light via `prefers-color-scheme`.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- Purple
+   The default: the dark violet the site has always used. */
+:root,
+:root[data-theme='purple'] {
+  color-scheme: dark;
+
+  --bg: var(--ink-950);
+  --bg-elevated: #130c1e;
+  --surface: #1a1128;
+  --surface-2: #241834;
+  --surface-3: #2f2143;
+  --line: #382a4d;
+  --line-strong: #4a3862;
+
+  --text: #f7f3fb;
+  --text-muted: #b6a8c6;
+  --text-subtle: #8b7c9c;
+  --text-inverse: #17101f;
+
+  --brand: var(--purple-500);
+  --brand-strong: var(--purple-400);
+  --brand-soft: rgb(168 85 247 / 14%);
+  --on-brand: #ffffff;
+
+  --success: var(--green-400);
+  --warning: var(--amber-400);
+  --danger: var(--red-400);
+
+  --shadow-sm: 0 2px 8px rgb(5 2 10 / 40%);
+  --shadow-md: 0 12px 32px rgb(5 2 10 / 50%);
+  --shadow-lg: 0 28px 70px rgb(5 2 10 / 62%);
+
+  --hero-bg: radial-gradient(120% 90% at 50% 0%, #3a1c5c 0%, #1b0f2b 45%, var(--bg) 78%);
+  --hero-glow: rgb(168 85 247 / 22%);
+  --header-bg: rgb(14 9 22 / 82%);
+  --scrim: rgb(6 3 12 / 78%);
+
+  /*
+   * The focus ring, as its own token rather than "the brand colour".
+   *
+   * On most themes they are the same, but a theme whose accent is close to its
+   * surface needs a different ring — and the accent setting can change the
+   * brand colour out from under it at any moment. One token means the ring is
+   * never accidentally invisible.
+   */
+  --focus-ring: var(--brand-strong);
+}
+
+/* --------------------------------------------------------------- Midnight
+   Deep blue with a gold accent — the alternative dark scheme. */
+:root[data-theme='midnight'] {
+  color-scheme: dark;
+
+  --bg: #060a12;
+  --bg-elevated: #0a111c;
+  --surface: #0e1624;
+  --surface-2: #16202f;
+  --surface-3: #1e2b3e;
+  --line: #24334a;
+  --line-strong: #33455f;
+
+  --text: #f2f6fb;
+  --text-muted: #9db0c6;
+  --text-subtle: #74879e;
+  --text-inverse: #0b1220;
+
+  --brand: #f5bd38;
+  --brand-strong: #ffd76b;
+  --brand-soft: rgb(245 189 56 / 14%);
+  --on-brand: #17110a;
+
+  --shadow-sm: 0 2px 8px rgb(0 0 0 / 45%);
+  --shadow-md: 0 12px 32px rgb(0 0 0 / 55%);
+  --shadow-lg: 0 28px 70px rgb(0 0 0 / 65%);
+
+  --hero-bg: radial-gradient(120% 90% at 50% 0%, #16304f 0%, #0a1524 46%, var(--bg) 78%);
+  --hero-glow: rgb(245 189 56 / 16%);
+  --header-bg: rgb(6 10 18 / 84%);
+  --scrim: rgb(2 5 11 / 80%);
+}
+
+/* ----------------------------------------------------------------- Ocean */
+:root[data-theme='ocean'] {
+  color-scheme: dark;
+
+  --bg: #031014;
+  --bg-elevated: #061a20;
+  --surface: #08222a;
+  --surface-2: #0e2f39;
+  --surface-3: #143d4a;
+  --line: #17454f;
+  --line-strong: #226070;
+
+  --text: #ecfbfb;
+  --text-muted: #9dc2c7;
+  --text-subtle: #74a0a7;
+  --text-inverse: #03181c;
+
+  --brand: #22d3c5;
+  --brand-strong: #67e8dc;
+  --brand-soft: rgb(34 211 197 / 14%);
+  --on-brand: #022a28;
+
+  --shadow-sm: 0 2px 8px rgb(0 12 16 / 45%);
+  --shadow-md: 0 12px 32px rgb(0 12 16 / 55%);
+  --shadow-lg: 0 28px 70px rgb(0 12 16 / 65%);
+
+  --hero-bg: radial-gradient(120% 90% at 50% 0%, #0c4a55 0%, #05242c 46%, var(--bg) 78%);
+  --hero-glow: rgb(34 211 197 / 18%);
+  --header-bg: rgb(3 16 20 / 84%);
+  --scrim: rgb(1 10 13 / 80%);
+}
+
+/* ----------------------------------------------------------------- Light */
+:root[data-theme='light'] {
+  /* On white, the strong tint is too pale for a ring. */
+  --focus-ring: var(--brand);
+  color-scheme: light;
+
+  --bg: var(--ink-50);
+  --bg-elevated: var(--ink-0);
+  --surface: var(--ink-0);
+  --surface-2: var(--ink-100);
+  --surface-3: var(--ink-200);
+  --line: #e2dbec;
+  --line-strong: #cdc1dc;
+
+  --text: var(--ink-900);
+  --text-muted: var(--ink-500);
+  --text-subtle: var(--ink-400);
+  --text-inverse: var(--ink-0);
+
+  --brand: var(--purple-700);
+  --brand-strong: var(--purple-600);
+  --brand-soft: rgb(126 34 206 / 10%);
+  --on-brand: #ffffff;
+
+  --success: var(--green-600);
+  --warning: var(--amber-600);
+  --danger: var(--red-600);
+
+  --shadow-sm: 0 1px 3px rgb(41 31 51 / 8%);
+  --shadow-md: 0 10px 28px rgb(41 31 51 / 12%);
+  --shadow-lg: 0 24px 60px rgb(41 31 51 / 16%);
+
+  --hero-bg: radial-gradient(120% 90% at 50% 0%, #efe4fb 0%, #f7f3fc 48%, var(--bg) 80%);
+  --hero-glow: rgb(126 34 206 / 12%);
+  --header-bg: rgb(255 255 255 / 86%);
+  --scrim: rgb(30 20 45 / 45%);
+}
+
+/* -------------------------------------------------------- High contrast
+   For readers who need maximum separation. Not a "prettier dark" — the
+   contrast ratios here are the point. */
+:root[data-theme='contrast'] {
+  /* Maximum contrast means exactly that: the ring is the text colour. */
+  --focus-ring: var(--text);
+  color-scheme: dark;
+
+  --bg: #000000;
+  --bg-elevated: #000000;
+  --surface: #0a0a0a;
+  --surface-2: #141414;
+  --surface-3: #1f1f1f;
+  --line: #666666;
+  --line-strong: #999999;
+
+  --text: #ffffff;
+  --text-muted: #e0e0e0;
+  --text-subtle: #bdbdbd;
+  --text-inverse: #000000;
+
+  --brand: #ffd400;
+  --brand-strong: #ffe968;
+  --brand-soft: rgb(255 212 0 / 18%);
+  --on-brand: #000000;
+
+  --success: #4ade80;
+  --warning: #ffd400;
+  --danger: #ff8a8a;
+
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
+
+  --hero-bg: #000000;
+  --hero-glow: transparent;
+  --header-bg: #000000;
+  --scrim: rgb(0 0 0 / 92%);
+}
+
+/* ------------------------------------------------------------------ Sepia
+   Warm, low-blue and quiet. The scheme to read a long page of text in late at
+   night — a real preference on a site people browse in bed, and one that no
+   amount of dimming a violet theme reproduces. */
+:root[data-theme='sepia'] {
+  --focus-ring: var(--brand-strong);
+  color-scheme: light;
+
+  --bg: #f6efe3;
+  --bg-elevated: #fbf6ec;
+  --surface: #fdf9f1;
+  --surface-2: #f2e9d8;
+  --surface-3: #e8dcc6;
+  --line: #ddcfb6;
+  --line-strong: #c9b795;
+
+  --text: #33291c;
+  --text-muted: #6b5c46;
+  --text-subtle: #8b7a61;
+  --text-inverse: #fdf9f1;
+
+  --brand: #a0522d;
+  --brand-strong: #8b4513;
+  --brand-soft: rgb(160 82 45 / 12%);
+  --on-brand: #fff8f0;
+
+  --success: #4f7942;
+  --warning: #b8860b;
+  --danger: #a4342a;
+
+  --shadow-sm: 0 2px 8px rgb(90 68 40 / 12%);
+  --shadow-md: 0 12px 32px rgb(90 68 40 / 16%);
+  --shadow-lg: 0 28px 70px rgb(90 68 40 / 22%);
+
+  --hero-bg: radial-gradient(120% 90% at 50% 0%, #efe0c8 0%, #f6efe3 55%, var(--bg) 80%);
+  --hero-glow: rgb(160 82 45 / 16%);
+  --header-bg: rgb(246 239 227 / 88%);
+  --scrim: rgb(51 41 28 / 55%);
+}
+
+/* --------------------------------------------------------------- Midnight-black
+   True black. On an OLED phone an unlit pixel draws no power at all, which is
+   a measurable difference on a site people scroll for a while — and some
+   people simply prefer it. Distinct from "contrast", which is about legibility
+   rather than about black. */
+:root[data-theme='black'] {
+  color-scheme: dark;
+
+  --bg: #000000;
+  --bg-elevated: #08060c;
+  --surface: #0d0a12;
+  --surface-2: #16111d;
+  --surface-3: #1f1829;
+  --line: #241d30;
+  --line-strong: #372c48;
+
+  --text: #f4f1f8;
+  --text-muted: #a99cba;
+  --text-subtle: #7d7090;
+  --text-inverse: #000000;
+
+  --brand: var(--purple-400);
+  --brand-strong: var(--purple-300);
+  --brand-soft: rgb(192 132 252 / 16%);
+  --on-brand: #14091f;
+
+  --success: var(--green-400);
+  --warning: var(--amber-400);
+  --danger: var(--red-400);
+
+  --shadow-sm: 0 2px 8px rgb(0 0 0 / 70%);
+  --shadow-md: 0 12px 32px rgb(0 0 0 / 80%);
+  --shadow-lg: 0 28px 70px rgb(0 0 0 / 90%);
+
+  --hero-bg: radial-gradient(120% 90% at 50% 0%, #1d0f30 0%, #0a0512 50%, var(--bg) 80%);
+  --hero-glow: rgb(192 132 252 / 18%);
+  --header-bg: rgb(0 0 0 / 88%);
+  --scrim: rgb(0 0 0 / 88%);
+}
+
+/* --------------------------------------------------------- Accent colour
+   Applied on top of any theme, so a visitor can keep the dark violet layout
+   but make the highlights green. `purple` is the default and adds nothing. */
+:root[data-accent='blue'] {
+  --brand: #3b82f6;
+  --brand-strong: #60a5fa;
+  --brand-soft: rgb(59 130 246 / 14%);
+  --on-brand: #ffffff;
+}
+
+:root[data-accent='green'] {
+  --brand: #10b981;
+  --brand-strong: #34d399;
+  --brand-soft: rgb(16 185 129 / 14%);
+  --on-brand: #052e21;
+}
+
+:root[data-accent='orange'] {
+  --brand: #f97316;
+  --brand-strong: #fb923c;
+  --brand-soft: rgb(249 115 22 / 14%);
+  --on-brand: #2a1102;
+}
+
+:root[data-accent='gold'] {
+  --brand: #f5bd38;
+  --brand-strong: #ffd76b;
+  --brand-soft: rgb(245 189 56 / 14%);
+  --on-brand: #17110a;
+}
+
+/* -------------------------------------------------- System colour scheme
+   Only applies while no explicit theme is stored; the bootstrap script writes
+   `data-theme` as soon as the visitor chooses one. */
+@media (prefers-color-scheme: light) {
+  :root[data-theme='system'] {
+    color-scheme: light;
+
+    --bg: var(--ink-50);
+    --bg-elevated: var(--ink-0);
+    --surface: var(--ink-0);
+    --surface-2: var(--ink-100);
+    --surface-3: var(--ink-200);
+    --line: #e2dbec;
+    --line-strong: #cdc1dc;
+
+    --text: var(--ink-900);
+    --text-muted: var(--ink-500);
+    --text-subtle: var(--ink-400);
+    --text-inverse: var(--ink-0);
+
+    --brand: var(--purple-700);
+    --brand-strong: var(--purple-600);
+    --brand-soft: rgb(126 34 206 / 10%);
+    --on-brand: #ffffff;
+
+    --shadow-sm: 0 1px 3px rgb(41 31 51 / 8%);
+    --shadow-md: 0 10px 28px rgb(41 31 51 / 12%);
+    --shadow-lg: 0 24px 60px rgb(41 31 51 / 16%);
+
+    --hero-bg: radial-gradient(120% 90% at 50% 0%, #efe4fb 0%, #f7f3fc 48%, var(--bg) 80%);
+    --hero-glow: rgb(126 34 206 / 12%);
+    --header-bg: rgb(255 255 255 / 86%);
+    --scrim: rgb(30 20 45 / 45%);
+  }
+}

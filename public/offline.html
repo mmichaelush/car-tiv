@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>אין חיבור | CAR־טיב</title>
+    <link rel="icon" href="/assets/images/favicon.ico" />
+    <!--
+      Deliberately self-contained: this page is shown precisely when the
+      network is gone, so it cannot depend on a stylesheet or a font arriving.
+      The colours are the brand's dark palette, hard-coded for the same reason.
+    -->
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        padding: 2rem;
+        background: #0e0916;
+        color: #f4f1f8;
+        font-family:
+          'Rubik',
+          system-ui,
+          -apple-system,
+          'Segoe UI',
+          sans-serif;
+        text-align: center;
+      }
+      main {
+        max-width: 32rem;
+      }
+      h1 {
+        font-size: 1.75rem;
+        margin: 1.5rem 0 0.75rem;
+      }
+      p {
+        color: #b6adc4;
+        line-height: 1.7;
+        margin: 0 0 1.5rem;
+      }
+      a {
+        display: inline-block;
+        padding: 0.75rem 1.5rem;
+        border-radius: 0.75rem;
+        background: #7c3aed;
+        color: #fff;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      img {
+        width: 72px;
+        height: 72px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/assets/images/logo-white.png" alt="" width="72" height="72" />
+      <h1>אין חיבור לאינטרנט</h1>
+      <p>
+        לא הצלחנו לטעון את העמוד. הספרייה האישית שלכם שמורה במכשיר וזמינה גם עכשיו — ברגע שהחיבור
+        יחזור, כל השאר יחזור איתו.
+      </p>
+      <a href="/">ניסיון נוסף</a>
+    </main>
+  </body>
+</html>

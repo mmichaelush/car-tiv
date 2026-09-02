@@ -1,0 +1,649 @@
+/* ==========================================================================
+   Overlays — dialogs, toasts, dropdowns, the search suggestion list and the
+   filter drawer.
+
+   One dialog implementation, one toast implementation. The old site mixed
+   SweetAlert with hand-rolled modals; everything here uses the native
+   <dialog> element, which brings focus trapping, Escape-to-close and
+   inertness for free.
+   ========================================================================== */
+
+/* --------------------------------------------------------------- Dialog */
+
+.dialog {
+  inline-size: min(680px, calc(100vw - 2rem));
+  max-block-size: min(88svh, 900px);
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-xl);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.dialog--wide {
+  inline-size: min(980px, calc(100vw - 2rem));
+}
+
+.dialog::backdrop {
+  background: var(--scrim);
+  backdrop-filter: blur(6px);
+}
+
+.dialog[open] {
+  animation: dialog-in var(--duration-base) var(--ease-out);
+}
+
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    translate: 0 12px;
+    scale: 0.98;
+  }
+}
+
+.dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-5) var(--space-4);
+  border-block-end: 1px solid var(--line);
+}
+
+.dialog__header h2 {
+  font-size: var(--text-xl);
+}
+
+.dialog__body {
+  padding: var(--space-5);
+  overflow-y: auto;
+  max-block-size: 68svh;
+}
+
+.dialog__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-5);
+  border-block-start: 1px solid var(--line);
+  background: var(--bg-elevated);
+}
+
+.dialog__close {
+  flex: none;
+  inline-size: 36px;
+  block-size: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--text-muted);
+}
+
+.dialog__close:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Tabs inside a dialog (the personal library). */
+.tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: 0 var(--space-5) var(--space-3);
+  border-block-end: 1px solid var(--line);
+  overflow-x: auto;
+}
+
+.tabs button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  white-space: nowrap;
+  transition: all var(--duration-fast) var(--ease-out);
+}
+
+.tabs button:hover {
+  color: var(--text);
+  background: var(--surface-2);
+}
+
+.tabs button[aria-selected='true'] {
+  background: var(--brand-soft);
+  color: var(--brand);
+  font-weight: var(--weight-medium);
+}
+
+.tabs .badge {
+  min-inline-size: 20px;
+  justify-content: center;
+}
+
+/* ---------------------------------------------------------------- Toast
+   Announcements for actions the visitor just took. `aria-live="polite"` on
+   the region means a screen reader hears them without being interrupted. */
+
+.toast-region {
+  position: fixed;
+  z-index: var(--z-toast);
+  inset-block-end: var(--space-5);
+  inset-inline-end: var(--space-5);
+  display: grid;
+  gap: var(--space-2);
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-inline-size: 16rem;
+  max-inline-size: min(24rem, calc(100vw - 2rem));
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
+  pointer-events: auto;
+  animation: toast-in var(--duration-base) var(--ease-out);
+}
+
+.toast--success {
+  border-inline-start: 3px solid var(--success);
+}
+
+.toast--error {
+  border-inline-start: 3px solid var(--danger);
+}
+
+.toast__action {
+  margin-inline-start: auto;
+  color: var(--brand);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.toast.is-leaving {
+  animation: toast-out var(--duration-base) var(--ease-in-out) forwards;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    translate: 0 14px;
+  }
+}
+
+@keyframes toast-out {
+  to {
+    opacity: 0;
+    translate: 0 8px;
+  }
+}
+
+@media (max-width: 560px) {
+  .toast-region {
+    inset-inline: var(--space-3);
+    inset-block-end: var(--space-3);
+  }
+}
+
+/* ------------------------------------------------- Search suggestions */
+
+.suggestions {
+  position: absolute;
+  z-index: var(--z-dropdown);
+  inset-block-start: calc(100% + var(--space-2));
+  inset-inline: 0;
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  text-align: start;
+}
+
+.suggestions[hidden] {
+  display: none;
+}
+
+.suggestions li a,
+.suggestions li button {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  text-align: start;
+  color: var(--text);
+  transition: background-color var(--duration-fast) var(--ease-out);
+}
+
+.suggestions li a:hover,
+.suggestions li button:hover,
+.suggestions li[aria-selected='true'] > * {
+  background: var(--surface-2);
+}
+
+.suggestions__label {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The typed part of the suggestion. `<mark>` carries the meaning; the styling
+   is ours, because the browser default is a yellow block that fights every
+   theme. */
+.suggestions__label mark {
+  background: none;
+  color: var(--brand);
+  font-weight: 600;
+}
+
+.suggestions__hint {
+  flex: none;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+}
+
+.suggestions__icon {
+  flex: none;
+  color: var(--text-subtle);
+}
+
+/* --------------------------------------------------------- Filter panel
+   A panel on desktop; a bottom sheet on a phone, where a wide panel would
+   push the results off screen. */
+
+.filters {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-5);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  margin-block-end: var(--space-4);
+}
+
+.filters[hidden] {
+  display: none;
+}
+
+.filters__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--space-4);
+}
+
+.filters__row > .field {
+  min-inline-size: 12rem;
+}
+
+.filters__actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-inline-start: auto;
+}
+
+.filters__group {
+  padding-block-start: var(--space-4);
+  border-block-start: 1px solid var(--line);
+}
+
+.filters__group h3 {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-block-end: var(--space-3);
+}
+
+.tag-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.selected-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.selected-tags:empty {
+  display: none;
+}
+
+@media (max-width: 700px) {
+  .filters {
+    position: fixed;
+    z-index: var(--z-overlay);
+    inset: auto 0 0;
+    max-block-size: 82svh;
+    overflow-y: auto;
+    border-radius: var(--radius-xl) var(--radius-xl) 0 0;
+    box-shadow: var(--shadow-lg);
+    margin: 0;
+    padding-block-end: var(--space-6);
+  }
+
+  .filters__actions {
+    inline-size: 100%;
+    margin-inline-start: 0;
+  }
+
+  .filters__actions .btn {
+    flex: 1;
+  }
+}
+
+/* ------------------------------------------------------------ Pagination */
+
+.pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: var(--space-1);
+  margin-block-start: var(--space-6);
+  flex-wrap: wrap;
+}
+
+.pagination button,
+.pagination span {
+  min-inline-size: 40px;
+  block-size: 40px;
+  display: grid;
+  place-items: center;
+  padding-inline: var(--space-2);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.pagination button:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+.pagination button[aria-current='page'] {
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: var(--weight-bold);
+}
+
+.pagination button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.load-more {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  margin-block-start: var(--space-6);
+}
+
+/* ------------------------------------------------------------ Theme picker
+   Themes are chosen by looking, not by reading a name. Each swatch paints the
+   theme's own background and accent, so the list needs no legend. */
+
+.theme-picker {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: var(--space-2);
+}
+
+.theme-swatch {
+  display: grid;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  text-align: center;
+  transition:
+    border-color var(--duration-fast) var(--ease-out),
+    transform var(--duration-fast) var(--ease-out);
+}
+
+.theme-swatch:hover {
+  border-color: var(--line-strong);
+}
+
+.theme-swatch[aria-checked='true'] {
+  border-color: var(--brand);
+  box-shadow: 0 0 0 1px var(--brand);
+}
+
+.theme-swatch__preview {
+  display: block;
+  block-size: 38px;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgb(128 128 128 / 25%);
+  background: linear-gradient(135deg, transparent 52%, var(--swatch-fg) 52%), var(--swatch-bg);
+}
+
+.theme-swatch__label {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+}
+
+.theme-swatch[aria-checked='true'] .theme-swatch__label {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------- Accent picker
+   A row of circles. The tick only shows on the chosen one, and is drawn in a
+   colour that works on every accent. */
+
+.accent-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.accent-swatch {
+  display: grid;
+  place-items: center;
+  inline-size: 34px;
+  block-size: 34px;
+  border-radius: 50%;
+  background: var(--swatch);
+  color: transparent;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--line);
+  transition: transform var(--duration-fast) var(--ease-out);
+}
+
+.accent-swatch:hover {
+  transform: scale(1.08);
+}
+
+.accent-swatch[aria-checked='true'] {
+  color: #fff;
+  border-color: var(--surface);
+  box-shadow: 0 0 0 2px var(--swatch);
+}
+
+.accent-swatch:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .accent-swatch:hover,
+  .theme-swatch:hover {
+    transform: none;
+  }
+}
+
+/* ------------------------------------------------------- Command palette
+   A dialog that is mostly one input. It sits high on the screen rather than
+   centred, so the results list grows downwards into space that is already
+   empty instead of pushing the field around as it fills. */
+
+.dialog--palette {
+  inline-size: min(620px, calc(100vw - 2rem));
+  margin-block-start: 12vh;
+}
+
+.palette__field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block-end: var(--space-3);
+  border-block-end: 1px solid var(--line);
+}
+
+.palette__icon {
+  color: var(--text-subtle);
+  display: grid;
+  place-items: center;
+}
+
+.palette__input {
+  flex: 1;
+  min-inline-size: 0;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--text-lg);
+  outline: none;
+}
+
+.palette__results {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+  max-block-size: 46svh;
+  overflow-y: auto;
+}
+
+.palette__group {
+  padding: var(--space-3) var(--space-2) var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  text-transform: none;
+}
+
+.palette__results li[role='option'] {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.palette__results li[aria-selected='true'] {
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.palette__row-icon {
+  display: grid;
+  place-items: center;
+  color: var(--text-subtle);
+  flex: none;
+}
+
+.palette__results li[aria-selected='true'] .palette__row-icon {
+  color: inherit;
+}
+
+.palette__row-label {
+  flex: 1;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette__row-hint {
+  flex: none;
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+}
+
+.palette__empty {
+  padding: var(--space-6) var(--space-3);
+  text-align: center;
+  color: var(--text-subtle);
+  font-size: var(--text-sm);
+}
+
+.palette__footer {
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+  font-size: var(--text-xs);
+  color: var(--text-subtle);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+/* --------------------------------------------------------------- Keys
+   One <kbd> style for the palette, the shortcut sheet and the hero hint. */
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 1.6em;
+  padding: 0.15em 0.4em;
+  font-family: inherit;
+  font-size: 0.85em;
+  line-height: 1;
+  color: var(--text-muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-block-end-width: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.shortcut-groups {
+  display: grid;
+  gap: var(--space-6);
+}
+
+.shortcut-groups h3 {
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+  margin-block-end: var(--space-3);
+}
+
+.shortcut-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+}
+
+.shortcut-list > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.shortcut-list dt {
+  display: flex;
+  gap: var(--space-1);
+  flex: none;
+  min-inline-size: 6rem;
+}
+
+.shortcut-list dd {
+  margin: 0;
+  font-size: var(--text-sm);
+  color: var(--text-muted);
+}
