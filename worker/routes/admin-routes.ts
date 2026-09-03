@@ -6,6 +6,7 @@
  */
 
 import {
+  MAX_BULK_IDS,
   MODERATION_STATUSES,
   PAGE_REQUEST_COST,
   PLAN_LIMITS,
@@ -34,8 +35,20 @@ function admin(context: RequestContext): AdminRepository {
 
 // ---------------------------------------------------------------- Schemas
 
-const idsSchema = z.object({
-  ids: z.array(z.string().length(11)).min(1, 'יש לבחור לפחות סרטון אחד').max(500),
+/**
+ * `MAX_BULK_IDS`, not a number written here.
+ *
+ * The ceiling is a consequence of D1's fifty-queries-per-invocation limit, and
+ * `shared/constants.ts` documents the measurement behind it. Written as a
+ * literal it would be a number nobody could safely change; named, raising it
+ * fails `tests/worker/plan-limits.test.ts` — which counts what the write paths
+ * actually issue — instead of failing an editor's bulk edit halfway through.
+ */
+export const idsSchema = z.object({
+  ids: z
+    .array(z.string().length(11))
+    .min(1, 'יש לבחור לפחות סרטון אחד')
+    .max(MAX_BULK_IDS, `אפשר לעדכן עד ${String(MAX_BULK_IDS)} סרטונים בפעולה אחת`),
 });
 
 const videoPatchSchema = z.object({

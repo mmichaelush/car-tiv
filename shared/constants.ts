@@ -102,9 +102,43 @@ export const PLAN_LIMITS = {
   rowsReadPerDay: 5_000_000,
   rowsWrittenPerDay: 100_000,
   databaseBytes: 500 * 1024 * 1024,
+  /**
+   * D1 also refuses more than fifty queries in one Worker invocation. Unlike
+   * the daily budgets this one is per request, so it is not something a quiet
+   * night recovers from: a route that needs fifty-one queries is broken every
+   * single time it runs.
+   */
+  queriesPerInvocation: 50,
   /** Warn in the admin dashboard once usage passes this share of a limit. */
   warnAtFraction: 0.7,
 } as const;
+
+/**
+ * How many videos one bulk admin action may touch.
+ *
+ * This was 500, and 500 does not fit. Not because of bindings — every write in
+ * `worker/repositories` chunks for those — but because of
+ * `queriesPerInvocation` above. A bulk edit is an update, an audit row, and a
+ * reindex, and the reindex alone reads the documents back, clears the old index
+ * rows and writes new ones at seven bindings apiece. At 500 ids that measured
+ * **60 statements for the reindex and 74 for the whole route**, against a limit
+ * of 50. The endpoint accepted the request, validated it, and then failed
+ * partway through — after the update had already been written.
+ *
+ * 200 is not a round number chosen for comfort. It is measured, at 200 ids:
+ * the reindex alone costs 23 statements, a bulk field edit plus its reindex 29,
+ * and the worst path of all — `addTag` plus a reindex, which binds two
+ * parameters a row rather than one and so chunks half as wide — 35. That leaves
+ * fifteen for the session lookup, the staff-account resolution and anything a
+ * future middleware adds.
+ * `tests/worker/plan-limits.test.ts` counts the real statements at exactly this
+ * number, so raising it here without making the paths cheaper fails the suite
+ * rather than production.
+ *
+ * The admin UI selects a page at a time and pages are at most 60 rows, so this
+ * is not a ceiling anyone reaches by hand — it bounds "select all" and the API.
+ */
+export const MAX_BULK_IDS = 200;
 
 /**
  * Worker requests one page view costs, counted in a real browser.

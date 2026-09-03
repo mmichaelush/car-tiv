@@ -22,11 +22,21 @@ import type { BatchOptions, ImportFormat, ImportRow } from '../repositories/impo
 /**
  * Rows per batch.
  *
- * Each row costs several small queries, and a Worker request has a CPU budget
- * measured in tens of milliseconds. 100 keeps a batch comfortably inside it
- * while still importing 8,000 videos in eighty requests.
+ * Not a CPU figure, which is what it used to be justified by. The binding
+ * constraint is D1's fifty queries per Worker invocation, and a batch costs
+ * roughly `rows/10` statements for the videos, `pairs/45` for their tags and
+ * `rows/12` for the reindex, on top of a fixed handful of lookups.
+ *
+ * 50 measures at **26 statements** with a realistic three tags a row, which
+ * leaves room for the rejected-row report in the same request, for the session
+ * lookup, and for a spreadsheet that is unusually tag-heavy.
+ * `tests/worker/plan-limits.test.ts` counts a full batch, so this number cannot
+ * be raised without the measurement following it.
+ *
+ * The cost of halving it is one more HTTP request per fifty rows: an 8,000-row
+ * import is 160 requests instead of 80, against a budget of 100,000 a day.
  */
-export const IMPORT_BATCH_SIZE = 100;
+export const IMPORT_BATCH_SIZE = 50;
 
 const FORMATS: readonly ImportFormat[] = ['json', 'csv', 'xlsx', 'youtube-urls'];
 
@@ -136,7 +146,9 @@ async function importRows(context: RequestContext, params: RouteParams): Promise
   }
 
   await imports.recordRejected(job.id, rejected);
-  const outcome = await imports.importBatch(job.id, rows, options);
+  // The job itself, not its id: `importBatch` needs `lastRowNumber` to drop a
+  // batch the client is resending, and this handler has already read the row.
+  const outcome = await imports.importBatch(job, rows, options);
 
   return ok({ ...outcome, rejected: rejected.length }, {}, { cache: CACHE.none });
 }

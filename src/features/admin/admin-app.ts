@@ -10,7 +10,7 @@
  * token is a shared secret entered once per session.
  */
 
-import { VIDEO_STATUSES, type VideoStatus } from '@shared/constants.js';
+import { MAX_BULK_IDS, VIDEO_STATUSES, type VideoStatus } from '@shared/constants.js';
 import { formatDuration } from '@shared/core/duration.js';
 import { formatRelativeDate } from '@shared/core/dates.js';
 import { videoPath } from '@shared/core/paths.js';
@@ -686,9 +686,27 @@ async function renderVideos(container: HTMLElement): Promise<void> {
     updateBulkBar();
   };
 
+  /**
+   * The selection counter, and the warning when it has grown past what one
+   * request can carry.
+   *
+   * Selection survives paging, so an editor working through a filtered list can
+   * accumulate more than `MAX_BULK_IDS` without ever seeing a page that large.
+   * Saying so here — while they are still selecting — is the difference between
+   * a limit and a rejected request: the server refuses the list either way, but
+   * only one of the two tells them before they press the button.
+   */
   const updateBulkBar = (): void => {
     bulkBar.hidden = selected.size === 0;
-    select('[data-selection-count]', container).textContent = `${selected.size} נבחרו`;
+    const overLimit = selected.size > MAX_BULK_IDS;
+    const counter = select('[data-selection-count]', container);
+    counter.textContent = overLimit
+      ? `${String(selected.size)} נבחרו — אפשר לעדכן עד ${String(MAX_BULK_IDS)} בפעולה אחת`
+      : `${String(selected.size)} נבחרו`;
+    counter.classList.toggle('text-danger', overLimit);
+    for (const button of selectAll<HTMLButtonElement>('[data-bulk-action]', bulkBar)) {
+      if (button.dataset.bulkAction !== 'clear') button.disabled = overLimit;
+    }
   };
 
   const load = async (): Promise<void> => {

@@ -55,6 +55,17 @@ export class SearchIndexRepository extends BaseRepository {
    *
    * Deleting and re-inserting rather than updating, because FTS5 has no upsert
    * and a partial update would leave a document half in the old shape.
+   *
+   * ## How many ids may be passed
+   *
+   * This is the most statement-hungry write in the code base: about `n/80`
+   * reads, `n/80` deletes and `n/12` inserts. D1 allows fifty queries in one
+   * Worker invocation, so the caller's list size is a real constraint and not
+   * a detail — `MAX_BULK_IDS` (200) is chosen so that this plus the write that
+   * preceded it stays inside the limit, with `tests/worker/plan-limits.test.ts`
+   * counting the statements rather than trusting this comment. A cron or a
+   * queue that wants to reindex the whole catalog must call this once per
+   * invocation-sized slice, not once with 7,876 ids.
    */
   async reindex(videoIds: readonly string[]): Promise<number> {
     if (videoIds.length === 0) return 0;
@@ -79,7 +90,11 @@ export class SearchIndexRepository extends BaseRepository {
       });
     }
 
-    // Seven bindings a row, so fourteen rows fit inside a statement's budget.
+    // Seven bindings a row, so twelve rows fit inside a statement's budget.
+    // That number is the expensive one on this path: the deletes and the reads
+    // are one statement per eighty ids, while the inserts are one per twelve,
+    // and it is the inserts that decide whether a bulk edit fits inside D1's
+    // fifty queries per invocation. `MAX_BULK_IDS` is derived from it.
     for (const group of chunkForBindings(rows, { perItem: INDEX_COLUMNS })) {
       statements.push({
         sql: `INSERT INTO videos_fts

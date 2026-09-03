@@ -30,11 +30,21 @@ export type Binding = string | number | null;
 export const MAX_BOUND_PARAMETERS = 100;
 
 /**
- * The list size this folder actually uses, with room for the fixed parameters
- * a statement carries alongside its id list (a `LIMIT`, a threshold, a date).
- * Twenty spare slots is more than any statement here needs.
+ * Parameters held back from every chunk.
+ *
+ * `fixed` below is the honest way to declare the parameters a statement binds
+ * alongside its list, and every call site here does declare it. This reserve is
+ * what protects the one that forgets: a statement that quietly grew a `LIMIT`
+ * lands at 91 parameters instead of 101, and fails a test rather than a
+ * production request.
+ *
+ * It used to be a flat cap of 80 rows per chunk instead, which is the same
+ * protection for an `id IN (…)` list and a much more expensive one for a
+ * multi-row `INSERT`: seven columns a row turned a 100-parameter budget into
+ * eleven rows rather than twelve, and the difference is paid in *statements*,
+ * against a limit of fifty per invocation.
  */
-export const BINDING_CHUNK = 80;
+export const BINDING_RESERVE = 10;
 
 /**
  * Split a list so each chunk fits inside one statement's binding budget.
@@ -48,20 +58,32 @@ export const BINDING_CHUNK = 80;
  * over the alternative — one statement per id — because that trades a binding
  * problem for a query-count one: D1's free plan also caps queries per Worker
  * invocation at 50, so 200 single-id statements is just a different way to
- * fail. One set-based statement per chunk stays inside both.
+ * fail. One set-based statement per chunk stays inside both — but only if the
+ * chunk is as large as the budget allows, which is why this function spends the
+ * whole budget rather than a round fraction of it.
  */
 export function chunkForBindings<T>(
   items: readonly T[],
   { perItem = 1, fixed = 0 }: { perItem?: number; fixed?: number } = {},
 ): T[][] {
-  const budget = Math.max(1, Math.floor((MAX_BOUND_PARAMETERS - fixed) / perItem));
-  const size = Math.min(budget, Math.max(1, Math.floor(BINDING_CHUNK / perItem)));
+  const budget = MAX_BOUND_PARAMETERS - fixed - BINDING_RESERVE;
+  const size = Math.max(1, Math.floor(budget / perItem));
 
   const chunks: T[][] = [];
   for (let index = 0; index < items.length; index += size) {
     chunks.push(items.slice(index, index + size));
   }
   return chunks;
+}
+
+/**
+ * The largest list `chunkForBindings` will fit into `statements` statements.
+ *
+ * Used to derive the admin bulk ceiling from the query budget rather than
+ * choosing a round number and hoping. See `MAX_BULK_IDS`.
+ */
+export function chunkSize({ perItem = 1, fixed = 0 }: { perItem?: number; fixed?: number }): number {
+  return Math.max(1, Math.floor((MAX_BOUND_PARAMETERS - fixed - BINDING_RESERVE) / perItem));
 }
 
 /** `?, ?, ?` for a list of `count` values. */

@@ -1,0 +1,22 @@
+-- Make a retried import batch a no-op instead of a second import.
+--
+-- The client sends a spreadsheet in batches of ascending row numbers. If a
+-- response was lost — a dropped connection, a closed laptop, a retry button —
+-- the client resent the batch, and the Worker imported it again. No video was
+-- duplicated (the id is the primary key), but every counter on the job climbed
+-- a second time, so the report an editor reads at the end said 5,300 rows
+-- imported from a 5,000-row file and there was no way to tell which number was
+-- real.
+--
+-- A high-water mark is enough for this, and is much cheaper than the obvious
+-- alternative. Recording every (job_id, row_number) would be one row per
+-- imported row — 8,000 rows of bookkeeping for an 8,000-row import, in a 500 MB
+-- database, to answer a question that is only ever asked about the batch that
+-- just arrived. The client is sequential by construction, so "the highest row
+-- number already written" answers it in one integer.
+--
+-- Existing jobs get 0, which means "nothing recorded" and lets any batch
+-- through — the old behaviour, which is the right default for a job that was
+-- created before this column existed.
+
+ALTER TABLE import_jobs ADD COLUMN last_row_number INTEGER NOT NULL DEFAULT 0;

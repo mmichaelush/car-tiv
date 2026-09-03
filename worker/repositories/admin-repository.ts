@@ -310,8 +310,9 @@ export class AdminRepository extends BaseRepository {
    * Soft delete. The row stays, so the change is reversible.
    *
    * Chunked like every other list-shaped write here: the bulk endpoints accept
-   * up to 500 ids, and 500 bindings in one statement is five times what D1
-   * allows. Deleting 500 videos would have failed outright.
+   * a list, and a list of ids bound directly into one statement is how the
+   * 100-parameter limit gets hit. It is chunked past `MAX_BULK_IDS` on purpose
+   * — a backfill calling this directly is not bounded by a request schema.
    */
   async softDelete(ids: readonly string[], userId: string | null): Promise<number> {
     if (ids.length === 0) return 0;

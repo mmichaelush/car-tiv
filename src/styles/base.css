@@ -227,6 +227,12 @@ p {
   color: var(--text-muted);
 }
 
+/* A line of text that is telling the reader something is wrong. */
+.text-danger {
+  color: var(--danger);
+  font-weight: var(--weight-medium);
+}
+
 .eyebrow {
   color: var(--brand);
   font-size: var(--text-xs);

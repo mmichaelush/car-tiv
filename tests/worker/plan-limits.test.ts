@@ -35,6 +35,10 @@ import { VideoRepository } from '@worker/repositories/video-repository.js';
 import type { VideoId } from '@shared/types/catalog.js';
 import { MaintenanceService, LINK_CHECK_BATCH } from '@worker/services/maintenance-service.js';
 import { MAX_BOUND_PARAMETERS } from '@worker/repositories/base.js';
+import { MAX_BULK_IDS, PLAN_LIMITS } from '@shared/constants.js';
+import { idsSchema } from '@worker/routes/admin-routes.js';
+import { IMPORT_BATCH_SIZE } from '@worker/routes/import-routes.js';
+import { ImportRepository } from '@worker/repositories/import-repository.js';
 import type { Env } from '@worker/env.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/d1.js';
 import { seedCatalog } from '../helpers/fixtures.js';
@@ -150,7 +154,11 @@ describe('no statement exceeds D1s bound-parameter limit', () => {
     ).toBe(BULK_COUNT);
   });
 
-  it('the whole admin bulk surface at its documented maximum', async () => {
+  it('the whole admin bulk surface, well past the list size the API accepts', async () => {
+    // Deliberately 500 rather than `MAX_BULK_IDS`: the API ceiling exists for
+    // the *query* budget, and chunking for bindings has to keep working
+    // independently of it — a cron or a backfill that calls these directly is
+    // not bounded by a request schema.
     const ids = seedManyVideos(BULK_COUNT);
     const admin = new AdminRepository(db);
 
@@ -323,5 +331,186 @@ describe('one maintenance run stays inside a Worker invocation', () => {
     });
 
     expect(statements.length).toBeLessThan(50);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The 50-queries-per-invocation limit, on the write paths
+// ---------------------------------------------------------------------------
+
+describe('an admin or import request stays inside one Worker invocation', () => {
+  /**
+   * D1's free plan allows 50 queries per Worker invocation. The maintenance
+   * cron was measured against that; the write paths a person triggers were not,
+   * and they are the ones that fan out per row.
+   *
+   * These count the statements the repositories actually issue, at exactly the
+   * list size the API accepts, so the number moves when the code does rather
+   * than when someone updates a comment. That coupling is the point: raising
+   * `MAX_BULK_IDS` without making the paths cheaper fails here.
+   *
+   * The headroom is deliberate and not slack. A real request also resolves the
+   * session and the staff account before the handler runs, and the budget is
+   * per *invocation*, not per repository call.
+   */
+  const BUDGET = PLAN_LIMITS.queriesPerInvocation;
+  const HEADROOM = 10;
+
+  /** Statements one route's writes issue, reported with the number in the message. */
+  const cost = async (work: () => Promise<unknown>): Promise<number> =>
+    (await db.record(async () => void (await work()))).length;
+
+  it('reindexing the largest edit the API accepts', async () => {
+    // The measurement that moved the ceiling: at the old maximum of 500 this
+    // was 60 statements — the request was accepted, the update written, and
+    // the reindex then failed partway through, leaving the catalog changed and
+    // the index describing videos that no longer existed in that form.
+    const ids = seedManyVideos(MAX_BULK_IDS);
+    const index = new SearchIndexRepository(db);
+
+    const statements = await cost(() => index.reindex(ids));
+    expect(statements, `${String(statements)} statements`).toBeLessThanOrEqual(BUDGET - HEADROOM);
+  });
+
+  it('the whole bulk-update path: update, audit, reindex', async () => {
+    // What one `POST /api/admin/videos/bulk` really costs, which is the number
+    // Cloudflare counts.
+    const ids = seedManyVideos(MAX_BULK_IDS);
+    const admin = new AdminRepository(db);
+    const index = new SearchIndexRepository(db);
+
+    const statements = await cost(async () => {
+      await admin.bulkUpdate(ids, { title: 'כותרת אחידה' }, null);
+      await index.reindex(ids);
+    });
+    expect(statements, `${String(statements)} statements`).toBeLessThanOrEqual(BUDGET - HEADROOM);
+  });
+
+  it('the most expensive path of all: tagging, then reindexing', async () => {
+    // `addTag` binds two parameters a row rather than one, so its chunks are
+    // half the size and it issues twice the statements. This is the path
+    // `MAX_BULK_IDS` was actually derived from.
+    const ids = seedManyVideos(MAX_BULK_IDS);
+    const admin = new AdminRepository(db);
+    const index = new SearchIndexRepository(db);
+
+    const statements = await cost(async () => {
+      await admin.addTag(ids, 'בלמים', null);
+      await index.reindex(ids);
+    });
+    expect(statements, `${String(statements)} statements`).toBeLessThanOrEqual(BUDGET - HEADROOM);
+  });
+
+  it('a delete of the documented maximum', async () => {
+    const ids = seedManyVideos(MAX_BULK_IDS);
+    const admin = new AdminRepository(db);
+
+    const statements = await cost(() => admin.softDelete(ids, null));
+    expect(statements, `${String(statements)} statements`).toBeLessThanOrEqual(BUDGET - HEADROOM);
+  });
+
+  it('a full import batch, tags and all', async () => {
+    // The path that was worst by an order of magnitude: a row at a time, six
+    // queries each plus two per tag, so a hundred rows with three tags apiece
+    // was about 1,200 queries against a limit of fifty. Every import failed on
+    // its first batch, partway through, with no record of where it stopped.
+    const imports = new ImportRepository(db);
+    const jobId = await imports.createJob('catalog.xlsx', 'xlsx', 5_000, {}, null);
+    const job = await imports.findJob(jobId);
+    expect(job).not.toBeNull();
+
+    const rows = Array.from({ length: IMPORT_BATCH_SIZE }, (_, index) => ({
+      rowNumber: index + 1,
+      draft: {
+        videoId: `imp${String(index).padStart(8, '0')}`,
+        title: `סרטון ייבוא ${String(index)}`,
+        description: 'תיאור',
+        categoryId: null,
+        // A handful of channels across the batch, which is what a real
+        // spreadsheet looks like — and what makes the channel lookup cheap.
+        channelName: `ערוץ ${String(index % 5)}`,
+        channelUrl: '',
+        // Three tags a row: two shared across the batch, one its own, so the
+        // tag table sees both the common and the worst case.
+        tags: ['בלמים', 'תחזוקה', `תגית ${String(index)}`],
+        durationSeconds: 300,
+        addedAt: null,
+        isHebrew: true,
+      },
+    }));
+
+    const statements = await cost(() =>
+       
+      imports.importBatch(job!, rows, {
+        updateExisting: false,
+        status: 'published',
+        defaultCategoryId: db.queryRaw<{ id: string }>(`SELECT id FROM categories LIMIT 1`)[0]!.id,
+      }),
+    );
+
+    expect(statements, `${String(statements)} statements`).toBeLessThanOrEqual(BUDGET - HEADROOM);
+    expect(db.rowCount('videos')).toBeGreaterThanOrEqual(IMPORT_BATCH_SIZE);
+  });
+
+  it('drops a batch the client is resending', async () => {
+    // Idempotency, measured by its effect rather than asserted in a comment:
+    // the second attempt writes nothing and costs nothing, so a dropped
+    // connection cannot make the final report claim more rows than the file
+    // had.
+    const imports = new ImportRepository(db);
+    const jobId = await imports.createJob('catalog.csv', 'csv', 2, {}, null);
+    const categoryId = db.queryRaw<{ id: string }>(`SELECT id FROM categories LIMIT 1`)[0]?.id ?? '';
+    const options = { updateExisting: false, status: 'published' as const, defaultCategoryId: categoryId };
+    const rows = [
+      {
+        rowNumber: 1,
+        draft: {
+          videoId: 'imp00000001',
+          title: 'סרטון',
+          description: '',
+          categoryId: null,
+          channelName: '',
+          channelUrl: '',
+          tags: [],
+          durationSeconds: 60,
+          addedAt: null,
+          isHebrew: true,
+        },
+      },
+    ];
+
+    const first = await imports.findJob(jobId);
+    expect(first).not.toBeNull();
+     
+    expect((await imports.importBatch(first!, rows, options)).imported).toBe(1);
+
+    const second = await imports.findJob(jobId);
+     
+    expect(second!.lastRowNumber).toBe(1);
+     
+    expect(await imports.importBatch(second!, rows, options)).toEqual({
+      imported: 0,
+      updated: 0,
+      duplicates: 0,
+      failed: 0,
+    });
+
+     
+    expect((await imports.findJob(jobId))!.importedRows).toBe(1);
+  });
+
+  it('refuses at the door a list the write paths could not serve', () => {
+    // The ceiling has to be enforced where the request arrives, not merely
+    // documented in a comment next to the repositories. Rejected here, an
+    // over-long list is a 400 the editor can act on; accepted here, it is a
+    // half-applied edit — the update written, the reindex failing on its
+    // fifty-first query, and the search index describing videos that no longer
+    // look like that.
+    const ids = (count: number) =>
+      Array.from({ length: count }, (_, index) => `bulk${String(index).padStart(7, '0')}`);
+
+    expect(idsSchema.safeParse({ ids: ids(MAX_BULK_IDS) }).success).toBe(true);
+    expect(idsSchema.safeParse({ ids: ids(MAX_BULK_IDS + 1) }).success).toBe(false);
+    expect(idsSchema.safeParse({ ids: [] }).success).toBe(false);
   });
 });
