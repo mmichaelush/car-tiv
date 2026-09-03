@@ -95,7 +95,9 @@ describe('keys that must differ', () => {
 
   it('separates the parameters an endpoint actually reads', () => {
     expect(keyOf('/api/tags?category=review')).not.toBe(keyOf('/api/tags?category=diy'));
-    expect(keyOf('/api/channels?featured=1')).not.toBe(keyOf('/api/channels'));
+    // `all=1` asks for every channel rather than only the NetFree-open ones,
+    // so it is a different answer and must be a different entry.
+    expect(keyOf('/api/channels?all=1')).not.toBe(keyOf('/api/channels'));
   });
 
   it('separates two endpoints', () => {

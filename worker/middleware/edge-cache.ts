@@ -62,7 +62,7 @@ import { parseQuery, serializeQuery } from '@shared/core/query.js';
  * commit.
  */
 const SIGNIFICANT_PARAMS: readonly (readonly [pattern: string, params: readonly string[]])[] = [
-  ['/api/channels', ['q', 'featured', 'page', 'limit']],
+  ['/api/channels', ['q', 'all', 'page', 'limit']],
   ['/api/tags', ['category', 'limit']],
   ['/api/tags/search', ['q', 'category']],
   ['/api/search/suggestions', ['q']],

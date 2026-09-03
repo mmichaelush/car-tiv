@@ -115,10 +115,10 @@ describe('applyPreferences', () => {
 
 describe('updatePreferences', () => {
   it('persists a change and applies it in the same call', () => {
-    updatePreferences({ theme: 'black' });
+    updatePreferences({ theme: 'amber' });
 
-    expect(readPreferences().theme).toBe('black');
-    expect(document.documentElement.dataset.theme).toBe('black');
+    expect(readPreferences().theme).toBe('amber');
+    expect(document.documentElement.dataset.theme).toBe('amber');
   });
 
   it('leaves the other settings alone', () => {

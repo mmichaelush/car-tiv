@@ -27,11 +27,20 @@ main,
   border-block-end: 1px solid var(--line);
 }
 
+/* Three things on a phone: open the menu, the brand, go to search. The bar has
+   its own padding rather than a `.shell`, because at this width the shell's
+   gutter is most of the bar. */
 .site-header__inner {
   display: flex;
   align-items: center;
-  gap: var(--space-5);
+  gap: var(--space-3);
   block-size: 100%;
+  padding-inline: var(--space-3);
+}
+
+/* The brand takes the middle and the two controls sit at the edges. */
+.site-header__inner .brand {
+  margin-inline: auto;
 }
 
 .brand {
@@ -44,8 +53,8 @@ main,
 }
 
 .brand img {
-  inline-size: 34px;
-  block-size: 34px;
+  inline-size: 30px;
+  block-size: 30px;
   object-fit: contain;
 }
 
@@ -76,6 +85,8 @@ main,
 .site-rail {
   position: fixed;
   z-index: var(--z-sticky);
+  /* Below the bar on a phone, where the bar exists; the wide-screen query
+     below takes it to the full height, because there is no bar there. */
   inset-block: var(--header-height) 0;
   inset-inline-start: 0;
   inline-size: var(--rail-expanded);
@@ -117,8 +128,59 @@ main,
   background: var(--scrim);
 }
 
+/* The brand, at the top of the rail rather than in a bar. */
+.site-rail__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  margin-block-end: var(--space-3);
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.site-rail__brand img {
+  flex: none;
+  border-radius: var(--radius-sm);
+}
+
+.site-rail__search {
+  margin-block-end: var(--space-3);
+}
+
+.site-rail__search .search {
+  background: var(--surface-2);
+  box-shadow: none;
+  padding-block: 0;
+}
+
+/* Shown only while the rail is collapsed — a text field two icons wide is a
+   field nobody can type into, so it becomes a link to the search page. */
+.site-rail__search-icon {
+  display: none;
+}
+
 .site-rail__nav {
   flex: 1;
+}
+
+/* Account, quick search and settings, at the foot of the rail. */
+.site-rail__tools {
+  display: grid;
+  gap: 2px;
+  margin-block-start: var(--space-3);
+  padding-block-start: var(--space-3);
+  border-block-start: 1px solid var(--line);
+}
+
+.site-rail__tools .account-slot:empty {
+  display: none;
+}
+
+.site-rail__tools .account-slot {
+  padding: var(--space-2) var(--space-3);
 }
 
 .site-rail__nav ul {
@@ -143,7 +205,8 @@ main,
 }
 
 .site-rail a,
-.site-rail__collapse {
+.site-rail__collapse,
+.site-rail__tools button {
   display: flex;
   align-items: center;
   gap: var(--space-3);
@@ -159,7 +222,8 @@ main,
 }
 
 .site-rail a:hover,
-.site-rail__collapse:hover {
+.site-rail__collapse:hover,
+.site-rail__tools button:hover {
   color: var(--text);
   background: var(--surface-2);
 }
@@ -208,11 +272,19 @@ main,
   }
 
   .site-rail {
+    inset-block: 0;
     inline-size: var(--rail-width);
     transform: none;
     visibility: visible;
     box-shadow: none;
     transition: inline-size var(--duration-base) var(--ease-out);
+  }
+
+  /* No bar at all. It held a brand, three icon buttons and a search field,
+     every one of which is now in the rail — so it was a strip above every page
+     duplicating what sat beside it, for 64 pixels of height. */
+  .site-header {
+    display: none;
   }
 
   .site-rail__scrim {
@@ -231,7 +303,22 @@ main,
   }
 
   :root[data-rail='collapsed'] .site-rail a,
-  :root[data-rail='collapsed'] .site-rail__collapse {
+  :root[data-rail='collapsed'] .site-rail__collapse,
+  :root[data-rail='collapsed'] .site-rail__tools button {
+    justify-content: center;
+    padding-inline: var(--space-2);
+  }
+
+  :root[data-rail='collapsed'] .site-rail__search,
+  :root[data-rail='collapsed'] .site-rail__brand .brand__mark {
+    display: none;
+  }
+
+  :root[data-rail='collapsed'] .site-rail__search-icon {
+    display: flex;
+  }
+
+  :root[data-rail='collapsed'] .site-rail__brand {
     justify-content: center;
     padding-inline: var(--space-2);
   }

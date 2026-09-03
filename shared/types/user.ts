@@ -43,7 +43,7 @@ export type ThemeName =
   | 'mono'
   | 'sepia'
   | 'classic'
-  | 'black'
+  | 'amber'
   | 'contrast'
   | 'youtube'
   | 'tiktok'

@@ -584,41 +584,41 @@
   --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
 }
 
-/* שחור מוחלט — pixels that are actually off on an OLED screen.
-   Its light half is the opposite promise: pure white, no tint at all. */
-:root[data-theme='black'] {
-  --bg: light-dark(#ffffff, #000000);
-  --bg-elevated: light-dark(#ffffff, #050505);
-  --surface: light-dark(#ffffff, #0a0a0a);
-  --surface-2: light-dark(#f4f4f5, #141414);
-  --surface-3: light-dark(#e7e7ea, #1e1e1e);
-  --line: light-dark(#dcdce0, #262626);
-  --line-strong: light-dark(#bcbcc2, #3a3a3a);
+/* ענבר — warm brown with gold.
+   Replaces a "pure black" theme that did not work. Its dark half was #000 with
+   a violet accent, which is the purple theme with the life taken out of it, and
+   its light half was pure white — so the same name covered two palettes with
+   nothing to do with each other and neither looked deliberate. This is one
+   idea in both modes: warm brown surfaces, gold accent, the colours of a
+   workshop rather than of an OLED test pattern. */
+:root[data-theme='amber'] {
+  --bg: light-dark(#fbf7f0, #171009);
+  --bg-elevated: light-dark(#ffffff, #1d150c);
+  --surface: light-dark(#ffffff, #241a10);
+  --surface-2: light-dark(#f5eee2, #2e2115);
+  --surface-3: light-dark(#ebe0cf, #3a2a1b);
+  --line: light-dark(#e3d6c2, #43301e);
+  --line-strong: light-dark(#c9b699, #5c4227);
 
-  --text: light-dark(#0a0a0a, #fafafa);
-  --text-muted: light-dark(#57575e, #a3a3a3);
-  --text-subtle: light-dark(#78787f, #737373);
+  --text: light-dark(#231a10, #faf3e8);
+  --text-muted: light-dark(#6b5842, #cbb598);
+  --text-subtle: light-dark(#8a755c, #9d876c);
 
-  --brand: light-dark(#7e22ce, #c084fc);
-  --brand-strong: light-dark(#6b21a8, #d8b4fe);
-  --brand-soft: light-dark(rgb(126 34 206 / 10%), rgb(192 132 252 / 16%));
-  --on-brand: light-dark(#ffffff, #14091f);
-  --focus-ring: light-dark(#7e22ce, #d8b4fe);
+  --brand: light-dark(#a35c11, #f0b24a);
+  --brand-strong: light-dark(#854a0a, #ffcf6b);
+  --brand-soft: light-dark(rgb(163 92 17 / 11%), rgb(240 178 74 / 16%));
+  --on-brand: light-dark(#ffffff, #1c1204);
+  --focus-ring: light-dark(#a35c11, #ffcf6b);
 
-  --shadow-color: light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 70%));
-  --shadow-color-strong: light-dark(rgb(0 0 0 / 16%), rgb(0 0 0 / 85%));
-  --hero-1: light-dark(rgb(126 34 206 / 12%), #1a0f28);
-  --hero-2: light-dark(#fafafa, #060606);
-  --hero-glow: light-dark(rgb(126 34 206 / 12%), rgb(192 132 252 / 18%));
-  --header-bg: light-dark(rgb(255 255 255 / 88%), rgb(0 0 0 / 86%));
-  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 82%));
+  --shadow-color: light-dark(rgb(90 60 20 / 10%), rgb(0 0 0 / 48%));
+  --shadow-color-strong: light-dark(rgb(90 60 20 / 16%), rgb(0 0 0 / 62%));
+  --hero-1: light-dark(rgb(163 92 17 / 13%), #4a2f0d);
+  --hero-2: light-dark(#fdf9f3, #1d150c);
+  --hero-glow: light-dark(rgb(163 92 17 / 13%), rgb(240 178 74 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 88%), rgb(23 16 9 / 86%));
+  --scrim: light-dark(rgb(40 28 14 / 45%), rgb(10 6 2 / 80%));
 }
 
-/* ניגודיות גבוהה — an accessibility palette, kept as a theme as well as a
-   setting so it can be chosen directly. Pure black on pure white, or the
-   reverse: no tinted surfaces, no shadows, and a ring that is never subtle.
-   `--accessible-contrast` (see accessibility.css) applies the same idea on
-   top of any other theme. */
 :root[data-theme='contrast'] {
   --bg: light-dark(#ffffff, #000000);
   --bg-elevated: light-dark(#ffffff, #000000);

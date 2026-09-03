@@ -67,7 +67,17 @@ export class CatalogRepository extends BaseRepository {
    * and this is the endpoint the home page, every category page and the
    * suggest form all ask for. Now it reads ten rows.
    */
-  async listCategories(): Promise<Category[]> {
+  /**
+   * The categories a visitor can browse.
+   *
+   * `withVideos` drops the empty ones, which is the default for every public
+   * listing: a category chip reading "0" is a filter that leads to an empty
+   * page, and the home grid was showing a card for one. It stays available
+   * unfiltered for `findCategory`, so a direct link to a category that has
+   * just been emptied still resolves rather than 404ing.
+   */
+  async listCategories(options: { withVideos?: boolean } = {}): Promise<Category[]> {
+    const onlyWithVideos = options.withVideos !== false;
     const rows = await this.all<CategoryRow>(
       `SELECT c.id, c.name, c.description, c.icon,
               c.color_from AS colorFrom, c.color_to AS colorTo,
@@ -78,7 +88,9 @@ export class CatalogRepository extends BaseRepository {
        ORDER BY c.sort_order, c.name`,
     );
 
-    return rows.map((row) => ({
+    const visible = onlyWithVideos ? rows.filter((row) => row.videoCount > 0) : rows;
+
+    return visible.map((row) => ({
       id: row.id,
       name: row.name,
       description: row.description,
@@ -95,7 +107,9 @@ export class CatalogRepository extends BaseRepository {
 
   /** A single category, or `null` when it does not exist or is hidden. */
   async findCategory(id: string): Promise<Category | null> {
-    const categories = await this.listCategories();
+    // Unfiltered: a direct link to a category that has just been emptied should
+    // load and say it is empty, not 404.
+    const categories = await this.listCategories({ withVideos: false });
     return categories.find((category) => category.id === id) ?? null;
   }
 
@@ -305,16 +319,36 @@ export class CatalogRepository extends BaseRepository {
   }
 }
 
+/**
+ * `channels.is_featured` means "this channel's YouTube page opens in NetFree".
+ *
+ * It was populated from `data/featured_channels.json`, the old site's list of
+ * channels whose *homepage* — not just the individual videos — is reachable
+ * behind the filter. It was rendered as a "מומלץ" badge, which said something
+ * the data does not mean and implied the other channels were worse.
+ *
+ * Two things follow from it, and nothing else:
+ *
+ *   * The channels directory lists only these. Sending someone to a channel
+ *     page whose every outward link is blocked is a dead end.
+ *   * `youtubeUrl` is withheld for the rest. A direct link to any channel still
+ *     works and still lists that channel's videos — those play fine — but there
+ *     is no button offering a page the visitor cannot open. Withheld here, in
+ *     the one place a channel is built, rather than in each template that might
+ *     forget.
+ */
 function toChannel(row: ChannelRow): Channel {
+  const netfreeOpen = toBoolean(row.isFeatured);
+
   return {
     id: row.id,
     slug: row.slug,
     name: row.name,
     description: row.description,
     imageUrl: row.imageUrl,
-    youtubeUrl: row.youtubeUrl,
+    youtubeUrl: netfreeOpen ? row.youtubeUrl : null,
     youtubeChannelId: row.youtubeChannelId,
-    isFeatured: toBoolean(row.isFeatured),
+    isFeatured: netfreeOpen,
     isVisible: toBoolean(row.isVisible),
     videoCount: row.videoCount,
   };

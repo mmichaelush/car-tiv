@@ -76,17 +76,20 @@ export const THEME_OPTIONS: readonly {
   group: 'core' | 'brand';
   swatch: readonly [string, string];
 }[] = [
+  // The names describe the palette, not a mood. "חצות" said nothing about a
+  // navy-and-gold theme and "נייר" said nothing about a warm sepia, so each one
+  // now names its two actual colours where that is what distinguishes it.
   { value: 'purple', label: 'סגול', group: 'core', swatch: ['#1a1128', '#a855f7'] },
-  { value: 'midnight', label: 'חצות', group: 'core', swatch: ['#131722', '#f5bd38'] },
-  { value: 'ocean', label: 'אוקיינוס', group: 'core', swatch: ['#0f1f24', '#22d3c5'] },
-  { value: 'forest', label: 'יער', group: 'core', swatch: ['#101c16', '#4ade80'] },
-  { value: 'sunset', label: 'שקיעה', group: 'core', swatch: ['#241610', '#fb923c'] },
-  { value: 'rose', label: 'ורד', group: 'core', swatch: ['#22131a', '#fb7185'] },
-  { value: 'nord', label: 'נורד', group: 'core', swatch: ['#161a20', '#88c0d0'] },
-  { value: 'classic', label: 'קלאסי', group: 'core', swatch: ['#161a1f', '#60a5fa'] },
-  { value: 'mono', label: 'מונוכרום', group: 'core', swatch: ['#1f1f1f', '#d4d4d4'] },
-  { value: 'sepia', label: 'נייר', group: 'core', swatch: ['#241c12', '#d4a373'] },
-  { value: 'black', label: 'שחור מלא', group: 'core', swatch: ['#000000', '#c084fc'] },
+  { value: 'midnight', label: 'כחול וזהב', group: 'core', swatch: ['#131722', '#f5bd38'] },
+  { value: 'ocean', label: 'טורקיז', group: 'core', swatch: ['#0f1f24', '#22d3c5'] },
+  { value: 'forest', label: 'ירוק יער', group: 'core', swatch: ['#101c16', '#4ade80'] },
+  { value: 'sunset', label: 'כתום חם', group: 'core', swatch: ['#241610', '#fb923c'] },
+  { value: 'rose', label: 'ורוד', group: 'core', swatch: ['#22131a', '#fb7185'] },
+  { value: 'amber', label: 'חום וזהב', group: 'core', swatch: ['#241a10', '#f0b24a'] },
+  { value: 'sepia', label: 'חול ונייר', group: 'core', swatch: ['#241c12', '#d4a373'] },
+  { value: 'nord', label: 'תכלת קרירה', group: 'core', swatch: ['#161a20', '#88c0d0'] },
+  { value: 'classic', label: 'כחול קלאסי', group: 'core', swatch: ['#161a1f', '#60a5fa'] },
+  { value: 'mono', label: 'אפור בלבד', group: 'core', swatch: ['#1f1f1f', '#d4d4d4'] },
   { value: 'contrast', label: 'ניגודיות גבוהה', group: 'core', swatch: ['#000000', '#ffd400'] },
 
   { value: 'youtube', label: 'יוטיוב', group: 'brand', swatch: ['#1f1e1e', '#ff3b30'] },
@@ -96,7 +99,7 @@ export const THEME_OPTIONS: readonly {
   { value: 'whatsapp', label: 'וואטסאפ', group: 'brand', swatch: ['#131f1b', '#25d366'] },
   { value: 'telegram', label: 'טלגרם', group: 'brand', swatch: ['#141c21', '#2aabee'] },
   { value: 'spotify', label: 'ספוטיפיי', group: 'brand', swatch: ['#151b17', '#1ed760'] },
-  { value: 'x', label: 'X', group: 'brand', swatch: ['#1f1f1f', '#ffffff'] },
+  { value: 'x', label: 'שחור־לבן', group: 'brand', swatch: ['#1f1f1f', '#ffffff'] },
 ];
 
 export const TEXT_SIZE_OPTIONS: readonly { value: TextSize; label: string }[] = [

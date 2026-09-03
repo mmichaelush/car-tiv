@@ -23,6 +23,13 @@
   margin: auto;
   inline-size: min(680px, calc(100vw - 2rem));
   max-block-size: min(88svh, 900px);
+  /* A column, so the footer is laid out rather than hoped for. The body used
+     to carry its own `max-block-size: 68svh` — a number picked independently
+     of the header and footer heights, so on a short screen the three of them
+     added up to more than the dialog and `overflow: hidden` cut the footer
+     off. Its buttons were the ones that close and reset the dialog. */
+  display: flex;
+  flex-direction: column;
   padding: 0;
   border: 1px solid var(--line);
   border-radius: var(--radius-xl);
@@ -54,6 +61,7 @@
 }
 
 .dialog__header {
+  flex: none;
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -67,12 +75,17 @@
 }
 
 .dialog__body {
+  /* `min-block-size: 0` is what lets a flex child actually shrink; without it
+     the body refuses to go below its content height and pushes the footer out
+     again. */
+  flex: 1 1 auto;
+  min-block-size: 0;
   padding: var(--space-5);
   overflow-y: auto;
-  max-block-size: 68svh;
 }
 
 .dialog__footer {
+  flex: none;
   display: flex;
   justify-content: flex-end;
   gap: var(--space-2);

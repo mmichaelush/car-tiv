@@ -131,7 +131,14 @@ async function listChannels(context: RequestContext): Promise<Response> {
   const params = context.url.searchParams;
   const page = await context.repositories.catalog.listChannels({
     q: params.get('q') ?? undefined,
-    featuredOnly: params.get('featured') === '1',
+    // NetFree-open channels only, unless a caller explicitly asks for all.
+    //
+    // `is_featured` records that the channel's own YouTube page opens behind
+    // the filter — see `toChannel`. The directory used to list all 416, most of
+    // which are a dead end: their videos play, but the channel page they link
+    // to does not open. `?all=1` is there for the admin and for anything that
+    // legitimately wants the whole list.
+    featuredOnly: params.get('all') !== '1',
     page: Number(params.get('page') ?? 1),
     limit: Number(params.get('limit') ?? PAGINATION.defaultLimit),
   });

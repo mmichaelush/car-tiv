@@ -8,7 +8,7 @@
  */
 
 import { categoryPath, ROUTES } from '@shared/core/paths.js';
-import { html, on, select, setHtml, toggleClass } from '../dom.js';
+import { html, on, setHtml, toggleClass } from '../dom.js';
 import { icon, type IconName } from '../icons.js';
 import { mountSearchBox } from '../components/search-box.js';
 import { catalog } from '../../data/catalog-repository.js';
@@ -136,6 +136,47 @@ function renderRail(options: ShellOptions): void {
   setHtml(
     rail,
     html`
+      <a class="site-rail__brand" href="${ROUTES.home}" aria-label="CAR-טיב, לדף הבית">
+        <img src="/assets/images/logo.png" alt="" width="30" height="30" />
+        <span class="site-rail__label">CAR<span class="brand__mark">־טיב</span></span>
+      </a>
+
+      ${
+        // Search lives here rather than in a bar across the top. Collapsed, the
+        // magnifier is a link to the search page — a text field two icons wide
+        // would be a field nobody can type into.
+        options.headerSearch === false
+          ? ''
+          : html`
+              <form class="site-rail__search" role="search" data-header-search>
+                <div class="search">
+                  <span class="search__icon">${icon('search', { size: 18 })}</span>
+                  <label class="sr-only" for="rail-search-input">חיפוש במאגר</label>
+                  <input
+                    id="rail-search-input"
+                    type="search"
+                    name="q"
+                    autocomplete="off"
+                    placeholder="חיפוש סרטון או דגם…"
+                  />
+                  <button
+                    type="button"
+                    class="search__clear"
+                    data-search-clear
+                    hidden
+                    aria-label="ניקוי החיפוש"
+                  >
+                    ${icon('close', { size: 16 })}
+                  </button>
+                  <div class="suggestions" data-suggestions hidden></div>
+                </div>
+              </form>
+              <a class="site-rail__search-icon" href="${ROUTES.search}" aria-label="חיפוש">
+                <span class="site-rail__icon">${icon('search', { size: 20 })}</span>
+              </a>
+            `
+      }
+
       <nav class="site-rail__nav" aria-label="ניווט ראשי">
         ${NAV_GROUPS.map(
           (group) => html`
@@ -159,6 +200,23 @@ function renderRail(options: ShellOptions): void {
         )}
       </nav>
 
+      <div class="site-rail__tools">
+        <!-- Filled in by the account feature once the session resolves. -->
+        <div class="account-slot" data-account-slot></div>
+        <button type="button" data-open-palette title="חיפוש מהיר (Ctrl+K)">
+          <span class="site-rail__icon">${icon('command', { size: 20 })}</span>
+          <span class="site-rail__label">חיפוש מהיר</span>
+        </button>
+        <button type="button" data-open-library title="הספרייה שלי">
+          <span class="site-rail__icon">${icon('bookmark', { size: 20 })}</span>
+          <span class="site-rail__label">שמורים</span>
+        </button>
+        <button type="button" data-open-theme title="עיצוב והעדפות">
+          <span class="site-rail__icon">${icon('settings', { size: 20 })}</span>
+          <span class="site-rail__label">עיצוב והעדפות</span>
+        </button>
+      </div>
+
       <button
         type="button"
         class="site-rail__collapse"
@@ -179,6 +237,14 @@ function renderRail(options: ShellOptions): void {
 
   main.before(rail);
   main.before(scrim);
+
+  const searchForm = rail.querySelector<HTMLFormElement>('[data-header-search]');
+  if (searchForm != null) {
+    mountSearchBox({
+      form: searchForm,
+      suggest: (query, signal) => catalog.suggest(query, signal),
+    });
+  }
 
   applyRailState(readPreferences().navCollapsed);
   bindRail(scrim);
@@ -219,6 +285,24 @@ function bindRail(scrim: HTMLElement): void {
         closeDrawer();
       }
       target.closest('[data-menu-toggle]')?.setAttribute('aria-expanded', String(open));
+      return;
+    }
+
+    if (target.closest('[data-open-palette]') != null) {
+      openCommandPalette();
+      closeDrawer();
+      return;
+    }
+
+    if (target.closest('[data-open-theme]') != null) {
+      openThemeDialog();
+      closeDrawer();
+      return;
+    }
+
+    if (target.closest('[data-open-library]') != null) {
+      void openLibraryDialog();
+      closeDrawer();
       return;
     }
 
@@ -296,115 +380,53 @@ function findSearchField(): HTMLInputElement | null {
   return null;
 }
 
+/**
+ * The narrow-screen bar.
+ *
+ * There is no bar at all on a wide screen. It held a brand, three icon buttons
+ * and a search field, all of which now live in the rail, which is on every page
+ * anyway — so the bar was a strip of chrome above every page that duplicated
+ * what was beside it and cost 64 pixels of height.
+ *
+ * On a phone the rail is off-canvas, so something has to open it and the brand
+ * has to be somewhere: hence a slim bar with the menu button, the brand, and a
+ * link to the search page. `.site-header` is `display: none` at the width where
+ * the rail becomes permanent.
+ */
 function renderHeader(options: ShellOptions): void {
   const header = document.querySelector('[data-site-header]');
   if (header == null) return;
 
-  const withSearch = options.headerSearch !== false;
-
   setHtml(
     header,
     html`
-      <div class="site-header__inner shell">
+      <div class="site-header__inner">
+        <button
+          class="icon-btn menu-toggle"
+          type="button"
+          data-menu-toggle
+          aria-label="תפריט"
+          aria-expanded="false"
+          aria-controls="site-rail"
+        >
+          ${icon('menu', { size: 20 })}
+        </button>
+
         <a class="brand" href="${ROUTES.home}" aria-label="CAR-טיב, לדף הבית">
-          <img src="/assets/images/logo.png" alt="" width="34" height="34" />
+          <img src="/assets/images/logo.png" alt="" width="30" height="30" />
           <span>CAR<span class="brand__mark">־טיב</span></span>
         </a>
 
         ${
-          withSearch
-            ? html`
-                <form class="header-search" role="search" data-header-search>
-                  <div class="search">
-                    <span class="search__icon">${icon('search', { size: 18 })}</span>
-                    <label class="sr-only" for="header-search-input">חיפוש במאגר</label>
-                    <input
-                      id="header-search-input"
-                      type="search"
-                      name="q"
-                      autocomplete="off"
-                      placeholder="חיפוש סרטון, יצרן או דגם…"
-                    />
-                    <button
-                      type="button"
-                      class="search__clear"
-                      data-search-clear
-                      hidden
-                      aria-label="ניקוי החיפוש"
-                    >
-                      ${icon('close', { size: 16 })}
-                    </button>
-                    <div class="suggestions" data-suggestions hidden></div>
-                  </div>
-                </form>
-              `
-            : ''
+          options.headerSearch === false
+            ? ''
+            : html`<a class="icon-btn" href="${ROUTES.search}" aria-label="חיפוש">
+                ${icon('search', { size: 20 })}
+              </a>`
         }
-
-        <div class="header-actions">
-          <!-- Filled in by the account feature once the session resolves. -->
-          <div class="account-slot" data-account-slot></div>
-          <button
-            class="icon-btn"
-            type="button"
-            data-open-palette
-            aria-label="חיפוש מהיר ופקודות"
-            title="חיפוש מהיר (Ctrl+K)"
-          >
-            ${icon('command', { size: 18 })}
-          </button>
-          <button
-            class="icon-btn"
-            type="button"
-            data-open-library
-            aria-label="הספרייה שלי"
-            title="הספרייה שלי"
-          >
-            ${icon('library', { size: 18 })}
-          </button>
-          <button
-            class="icon-btn"
-            type="button"
-            data-open-theme
-            aria-label="ערכת נושא והעדפות"
-            title="ערכת נושא"
-          >
-            ${icon('settings', { size: 18 })}
-          </button>
-          <button
-            class="icon-btn menu-toggle"
-            type="button"
-            data-menu-toggle
-            aria-label="תפריט"
-            aria-expanded="false"
-            aria-controls="site-rail"
-          >
-            ${icon('menu', { size: 18 })}
-          </button>
-        </div>
       </div>
     `,
   );
-
-  const searchForm = header.querySelector<HTMLFormElement>('[data-header-search]');
-  if (searchForm != null) {
-    mountSearchBox({
-      form: searchForm,
-      suggest: (query, signal) => catalog.suggest(query, signal),
-    });
-  }
-
-  on(select('[data-open-palette]', header), 'click', () => {
-    openCommandPalette();
-  });
-
-  on(select('[data-open-theme]', header), 'click', () => {
-    openThemeDialog();
-  });
-
-  on(select('[data-open-library]', header), 'click', () => {
-    void openLibraryDialog();
-  });
 }
 
 function renderFooter(): void {

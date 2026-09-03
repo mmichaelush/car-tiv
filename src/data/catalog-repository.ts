@@ -106,14 +106,21 @@ export class CatalogRepository {
     return this.#http.get<Category[]>('/categories', { signal });
   }
 
+  /**
+   * The channel directory.
+   *
+   * Only channels whose own YouTube page opens in NetFree, unless `all` is
+   * passed — see `toChannel` in the Worker's catalog repository for what that
+   * flag records and why the rest are omitted.
+   */
   listChannels(
-    options: { q?: string; featured?: boolean; page?: number; limit?: number } = {},
+    options: { q?: string; all?: boolean; page?: number; limit?: number } = {},
     signal?: AbortSignal,
   ): Promise<PagedResult<Channel>> {
     return this.#http.getPage<Channel>('/channels', {
       params: {
         q: options.q,
-        featured: options.featured === true ? '1' : undefined,
+        all: options.all === true ? '1' : undefined,
         page: options.page,
         limit: options.limit,
       },
