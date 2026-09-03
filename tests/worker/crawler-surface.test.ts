@@ -20,6 +20,9 @@
  *    text and all 7,876 video URLs 404ed.
  */
 
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDatabase, type TestDatabase } from '../helpers/d1.js';
 import { seedCatalog } from '../helpers/fixtures.js';
@@ -71,6 +74,63 @@ describe('robots.txt', () => {
     expect(body).toContain('Disallow: /library/');
     expect(body).toContain('Disallow: /search?');
     expect(body).toContain('Allow: /');
+  });
+});
+
+describe('the page a wrong URL gets', () => {
+  /**
+   * `wrangler.jsonc` has said `"not_found_handling": "404-page"` since the
+   * project started, and `404.html` had never been built. Workers Static Assets
+   * serves that file from the root of the assets directory when nothing
+   * matches; absent, a wrong URL got whatever the platform does with no page at
+   * all.
+   *
+   * `worker/index.ts` depends on it too — `servePage` deliberately stops
+   * rewriting a malformed video id so the asset handler can answer with the 404
+   * page — so this is a file two other components already assume exists.
+   *
+   * These read the **sources**, not `dist/`. The bug was never in the HTML: it
+   * was that three files disagreed about whether the page existed, and a test
+   * that reads build output would be a test that passes or fails depending on
+   * whether someone happened to run a build first. `npm test` runs before
+   * `npm run build` in CI, so such a test would simply never have run there.
+   */
+  const root = (name: string): string | null => {
+    const file = path.join(process.cwd(), name);
+    return existsSync(file) ? readFileSync(file, 'utf8') : null;
+  };
+
+  it('exists as a source page', () => {
+    expect(
+      root('404.html'),
+      '404.html — wrangler.jsonc promises this to Cloudflare',
+    ).not.toBeNull();
+  });
+
+  it('is listed as a Vite input, or nothing would ever build it', () => {
+    // The whole bug, in one assertion: the platform was told the page exists
+    // and the bundler was never told to make it.
+    expect(root('vite.config.ts') ?? '').toContain("'404.html'");
+  });
+
+  it('is the page the deployment configuration actually asks for', () => {
+    expect(root('wrangler.jsonc') ?? '').toContain('"not_found_handling": "404-page"');
+  });
+
+  it('is a real page, not a bare string', () => {
+    // It carries the shell, so someone who lands on it leaves through the
+    // navigation rather than the back button.
+    const page = root('404.html') ?? '';
+    expect(page).toContain('data-site-header');
+    expect(page).toContain('data-site-footer');
+    expect(page).toContain('lang="he"');
+    expect(page).toContain('dir="rtl"');
+  });
+
+  it('tells a crawler not to index it', () => {
+    // One page stands in for thousands of wrong URLs. Indexed, they become
+    // thousands of pages with identical content.
+    expect(root('404.html') ?? '').toMatch(/name="robots"[^>]*noindex/);
   });
 });
 

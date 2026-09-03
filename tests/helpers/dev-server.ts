@@ -73,22 +73,47 @@ function staticFile(pathname: string): { body: Buffer; type: string } | null {
 
 async function main(): Promise<void> {
   const useFixture = process.argv.includes('--seed');
+  // `--quiet` for scripts that drive this server and need their own output to
+  // be readable: `ENVIRONMENT: 'test'` is what makes the Worker's logger
+  // silent, and a hundred request lines otherwise bury the one line that says
+  // whether the check passed.
+  const quiet = process.argv.includes('--quiet');
   const db = await database(useFixture);
 
   const env = {
     DB: db,
     ASSETS: {
       // The Worker falls back to the asset handler; give it the built file.
+      //
+      // Missing assets fall back to `404.html` **with a 404 status**, which is
+      // what `not_found_handling: "404-page"` does in production. This used to
+      // fall back to `index.html` with a 200, and that difference hid a real
+      // bug for the whole project: `wrangler.jsonc` had promised a 404 page
+      // since day one and none had ever been built, but every wrong URL here
+      // answered with a perfectly good home page, so nothing ever looked
+      // broken. A development server that is more forgiving than production is
+      // not a convenience — it is a place bugs go to hide.
       fetch: (input: Request | string) => {
         const url = new URL(typeof input === 'string' ? input : input.url);
-        const asset = staticFile(url.pathname) ?? staticFile('/index.html');
-        if (asset == null) return Promise.resolve(new Response('not found', { status: 404 }));
+        const asset = staticFile(url.pathname);
+        if (asset != null) {
+          return Promise.resolve(
+            new Response(new Uint8Array(asset.body), { headers: { 'content-type': asset.type } }),
+          );
+        }
+
+        const notFound = staticFile('/404.html');
         return Promise.resolve(
-          new Response(new Uint8Array(asset.body), { headers: { 'content-type': asset.type } }),
+          notFound == null
+            ? new Response('not found', { status: 404 })
+            : new Response(new Uint8Array(notFound.body), {
+                status: 404,
+                headers: { 'content-type': notFound.type },
+              }),
         );
       },
     },
-    ENVIRONMENT: 'development',
+    ENVIRONMENT: quiet ? 'test' : 'development',
     APP_URL: 'http://127.0.0.1:4180',
     STATIC_CATALOG_MODE: 'false',
     FEATURE_ACCOUNTS: 'true',
@@ -152,8 +177,10 @@ async function main(): Promise<void> {
   });
 
   await new Promise<void>((resolve) => server.listen(4180, resolve));
-  const videos = db.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM videos`)[0]?.n ?? 0;
-  console.log(`http://127.0.0.1:4180 — ${String(videos)} videos, real Worker, real SQL`);
+  if (!quiet) {
+    const videos = db.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM videos`)[0]?.n ?? 0;
+    console.log(`http://127.0.0.1:4180 — ${String(videos)} videos, real Worker, real SQL`);
+  }
 }
 
 await main();

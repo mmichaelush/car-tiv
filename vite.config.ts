@@ -25,6 +25,11 @@ const pages = {
   privacy: 'privacy/index.html',
   terms: 'terms/index.html',
   admin: 'admin/index.html',
+  // The page Workers Static Assets serves when nothing matches — `wrangler.jsonc`
+  // has named it since the project started. It is built like any other page so
+  // it gets the shell, the themes and the search that make it useful rather
+  // than a dead end; the platform supplies the 404 status.
+  notFound: '404.html',
 } as const;
 
 const resolvePath = (relative: string): string => fileURLToPath(new URL(relative, import.meta.url));

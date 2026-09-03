@@ -706,10 +706,34 @@ main,
   background: var(--bg-elevated);
 }
 
+/* The footer stacks by default and only becomes columns when they fit.
+ *
+ * It used to be `minmax(200px, 1.3fr) repeat(auto-fit, minmax(140px, 1fr))` at
+ * every width, and those minimums are *hard*: a grid track does not shrink or
+ * wrap below its minimum, it overflows. On a 390px phone the content box is
+ * about 358px and the first two tracks alone demand 200 + 140 + 24 = 364, so
+ * the footer was 27px wider than the screen — and because it is the widest
+ * element on the page, the whole document scrolled sideways under a thumb. On
+ * every page of the site. A screenshot looks perfect, which is how it survived
+ * this long; the number only appears if something measures `scrollWidth`, and
+ * now `tests/ui/…` does.
+ *
+ * `min(200px, 100%)` is the usual trick and does *not* work here: the `100%`
+ * resolves against the whole grid container, not against what is left after the
+ * other tracks, so it stays 200px and overflows exactly as before. One column
+ * until there is room for more is both simpler and actually correct. */
 .site-footer__grid {
   display: grid;
-  grid-template-columns: minmax(200px, 1.3fr) repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: 1fr;
   gap: var(--space-4) var(--space-5);
+}
+
+@media (min-width: 560px) {
+  .site-footer__grid {
+    grid-template-columns:
+      minmax(200px, 1.3fr)
+      repeat(auto-fit, minmax(140px, 1fr));
+  }
 }
 
 .site-footer h3 {

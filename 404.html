@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>הדף לא נמצא | CAR־טיב</title>
+    <meta
+      name="description"
+      content="הכתובת הזאת לא קיימת באתר. אפשר לחזור לדף הבית או לחפש במאגר."
+    />
+    <meta name="theme-color" content="#0e0916" />
+    <!-- A 404 must never be indexed: it is the same page for thousands of wrong
+         URLs, and a crawler that indexes it treats them as thousands of real
+         pages with duplicate content. -->
+    <meta name="robots" content="noindex, follow" />
+    <link rel="icon" href="/assets/images/favicon.ico" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link
+      rel="preload"
+      href="/assets/fonts/rubik/rubik-regular.woff2"
+      as="font"
+      type="font/woff2"
+      crossorigin
+    />
+    <script src="/theme-bootstrap.js"></script>
+    <script type="module" src="/src/app/not-found.ts"></script>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#main">דילוג לתוכן</a>
+    <header class="site-header" data-site-header></header>
+
+    <main id="main">
+      <section class="page-header shell">
+        <p class="eyebrow">שגיאה 404</p>
+        <h1>הדף הזה לא נמצא</h1>
+        <p>
+          ייתכן שהכתובת הוקלדה בטעות, שהסרטון הוסר מהמאגר, או שהקישור שהגעתם ממנו כבר לא מעודכן.
+        </p>
+      </section>
+
+      <div class="shell" data-not-found-body></div>
+    </main>
+
+    <footer class="site-footer" data-site-footer></footer>
+  </body>
+</html>
