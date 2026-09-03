@@ -213,7 +213,7 @@ function renderDetail(video: VideoDetail): void {
                     : html`<img src="${video.channel.imageUrl}" alt="" width="44" height="44" />`
                 }
                 <div>
-                  <strong>${video.channel.name}</strong>
+                  <strong><bdi>${video.channel.name}</bdi></strong>
                   <p class="muted" style="font-size:var(--text-sm)">ערוץ</p>
                 </div>
                 <a class="btn btn--secondary btn--sm" href="${channelPath(video.channel.slug)}">
@@ -284,7 +284,7 @@ function renderDetail(video: VideoDetail): void {
                   ${video.description}
                 </p>
                 <button class="btn btn--ghost btn--sm" type="button" data-act="expand">
-                  הצגת התיאור המלא
+                  ${icon('chevronDown', { size: 16 })} הצגת התיאור המלא
                 </button>
               </div>
             `

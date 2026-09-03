@@ -225,6 +225,30 @@ export function formatCount(value: number): string {
   return value.toLocaleString('he-IL');
 }
 
+/**
+ * A count with its noun, in Hebrew rather than in template-literal Hebrew.
+ *
+ * `${count} סרטונים` produces "1 סרטונים" — plural agreement with a singular
+ * number, which every Hebrew reader notices immediately and which appeared on
+ * channel cards, channel pages, playlists and the results bar. Hebrew also
+ * prefers the noun before the numeral in the singular ("סרטון אחד", not
+ * "1 סרטון"), so this is not something a plain `n === 1 ? singular : plural`
+ * on the noun alone can get right.
+ *
+ * Zero takes the plural, which is correct in Hebrew: "אין סרטונים".
+ *
+ *     countLabel(1, 'סרטון', 'סרטונים')   // סרטון אחד
+ *     countLabel(0, 'סרטון', 'סרטונים')   // 0 סרטונים
+ *     countLabel(257, 'סרטון', 'סרטונים') // 257 סרטונים
+ *
+ * @param one   The singular noun, e.g. `סרטון`.
+ * @param many  The plural noun, e.g. `סרטונים`.
+ */
+export function countLabel(value: number, one: string, many: string): string {
+  if (value === 1) return `${one} אחד`;
+  return `${formatCount(value)} ${many}`;
+}
+
 /** `true` when the visitor asked the system to reduce motion. */
 export function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches;

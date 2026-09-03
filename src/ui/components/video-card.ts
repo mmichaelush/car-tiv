@@ -117,7 +117,7 @@ export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeH
                           height="22"
                         />`
                   }
-                  <span>${video.channel.name}</span>
+                  <span><bdi>${video.channel.name}</bdi></span>
                 </p>
               `
         }

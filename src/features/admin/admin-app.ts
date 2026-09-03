@@ -117,7 +117,7 @@ function renderLogin(root: HTMLElement, message?: string): void {
             />
             ${message == null ? '' : html`<span class="field-error">${message}</span>`}
           </div>
-          <button class="btn btn--primary" type="submit">כניסה</button>
+          <button class="btn btn--primary" type="submit">${icon('lock', { size: 18 })} כניסה</button>
         </form>
       </div>
     `,
@@ -346,7 +346,7 @@ function maintenancePanel(status: MaintenanceStatus | null): SafeHtml {
       <div class="section-heading">
         <h2>בדיקת קישורים</h2>
         <button class="btn btn--secondary btn--sm" type="button" data-run-maintenance>
-          הרצה עכשיו
+          ${icon('refresh', { size: 16 })} הרצה עכשיו
         </button>
       </div>
 
@@ -578,19 +578,19 @@ async function renderVideos(container: HTMLElement): Promise<void> {
             <strong data-selection-count></strong>
             <div class="result-bar__tools">
               <button class="btn btn--secondary btn--sm" type="button" data-bulk-action="status">
-                שינוי סטטוס
+                ${icon('eye', { size: 16 })} שינוי סטטוס
               </button>
               <button class="btn btn--secondary btn--sm" type="button" data-bulk-action="category">
-                שינוי קטגוריה
+                ${icon('folder', { size: 16 })} שינוי קטגוריה
               </button>
               <button class="btn btn--secondary btn--sm" type="button" data-bulk-action="tag-add">
-                הוספת תגית
+                ${icon('tag', { size: 16 })} הוספת תגית
               </button>
               <button class="btn btn--danger btn--sm" type="button" data-bulk-action="delete">
-                מחיקה
+                ${icon('trash', { size: 16 })} מחיקה
               </button>
               <button class="btn btn--ghost btn--sm" type="button" data-bulk-action="clear">
-                ביטול הבחירה
+                ${icon('close', { size: 16 })} ביטול הבחירה
               </button>
             </div>
           </div>
@@ -905,8 +905,12 @@ function openVideoEditor(
       </div>
     `,
     footer: html`
-      <button type="button" class="btn btn--secondary" data-cancel>ביטול</button>
-      <button type="button" class="btn btn--primary" data-save>שמירה</button>
+      <button type="button" class="btn btn--secondary" data-cancel>
+        ${icon('close', { size: 16 })} ביטול
+      </button>
+      <button type="button" class="btn btn--primary" data-save>
+        ${icon('check', { size: 16 })} שמירה
+      </button>
     `,
   });
 

@@ -355,7 +355,11 @@
   z-index: 1;
   display: flex;
   gap: var(--space-1);
-  justify-content: flex-end;
+  /* Under the text, not away from it. `flex-end` reads as "the far corner",
+     which in RTL is the left — so the row of icons floated off on its own
+     while the category, title, channel, date and tags above it were all flush
+     right, and the card looked like two things stacked rather than one. */
+  justify-content: flex-start;
   padding-block-start: var(--space-2);
   border-block-start: 1px solid var(--line);
   margin-block-start: var(--space-2);
@@ -519,6 +523,11 @@
 .channel-card h3 {
   font-size: var(--text-md);
   margin-block-end: var(--space-1);
+  /* Channel names are often "English Name | שם עברי". Left to break wherever
+     the line runs out, the separator ends up stranded at the end of line one
+     with the Hebrew half alone below it, which reads as a rendering fault
+     rather than as one name. Balancing the lines puts the break at the pipe. */
+  text-wrap: balance;
 }
 
 .channel-card h3 a::after {

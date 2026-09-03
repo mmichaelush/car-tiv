@@ -157,8 +157,19 @@ main,
 }
 
 /* Shown only while the rail is collapsed — a text field two icons wide is a
-   field nobody can type into, so it becomes a link to the search page. */
-.site-rail__search-icon {
+   field nobody can type into, so it becomes a link to the search page.
+ *
+ * Written as `.site-rail .site-rail__search-icon` rather than the bare class,
+ * and that is not decoration. `.site-rail a` below sets `display: flex` on
+ * every link in the rail, and it is both later in the file and one point more
+ * specific — so the bare class lost, and the collapsed-only magnifier sat in
+ * the expanded rail, above the group headings, on every page that has the
+ * search box. Two classes puts this at the same specificity and it is declared
+ * first, which is still not enough; the `:root[data-rail='collapsed']` rule
+ * that reveals it is more specific than both, so the pair works in either
+ * order. This is the second bug of exactly this shape (see `.menu-toggle`):
+ * a `display: none` is only as strong as the rule it has to beat. */
+.site-rail .site-rail__search-icon {
   display: none;
 }
 
@@ -314,7 +325,7 @@ main,
     display: none;
   }
 
-  :root[data-rail='collapsed'] .site-rail__search-icon {
+  :root[data-rail='collapsed'] .site-rail .site-rail__search-icon {
     display: flex;
   }
 
@@ -454,20 +465,63 @@ main,
   font-variant-numeric: tabular-nums;
 }
 
-/* A short hero for interior pages. */
+/* A short hero for interior pages.
+ *
+ * Centred, which it was not. Every one of these blocks is an eyebrow, a title
+ * and a line of description introducing the *whole* page — and left flush to
+ * the reading edge above a full-width grid, a three-word eyebrow and a
+ * forty-character subtitle read as debris in the corner rather than as a
+ * heading. Worse, the elements inside them are different widths (the search
+ * form is capped at 44rem, the paragraph at 46rem, the title is as long as it
+ * is), so flush-start put three different left edges under one another and
+ * nothing lined up with the content below.
+ *
+ * Centring gives them one axis, and it is the axis the content grid already
+ * has. `margin-inline: auto` on the constrained children is what actually
+ * does it — `text-align` alone centres the words inside a block that is still
+ * hard against the edge. */
 .page-header {
   padding-block: clamp(2rem, 5vw, 3.5rem) var(--space-5);
+  text-align: center;
 }
 
 .page-header h1 {
   font-size: var(--text-3xl);
   margin-block: var(--space-2);
+  /* Long Hebrew titles otherwise break with one stranded word on line two. */
+  text-wrap: balance;
 }
 
 .page-header p {
   max-inline-size: 46rem;
+  margin-inline: auto;
   color: var(--text-muted);
   line-height: var(--leading-relaxed);
+  text-wrap: pretty;
+}
+
+/* Anything the header puts under the text — the search form on `/search`, the
+   channel filter on `/channels`, a row of actions — is centred on the same
+   axis rather than starting wherever its own width happens to leave it. Each
+   of these carries its own `max-inline-size`, which is exactly why they need
+   telling: a constrained block with no auto margin sits at the start edge. */
+.page-header form,
+.page-header .search,
+.page-header .field,
+.page-header__actions {
+  margin-inline: auto;
+}
+
+/* The label inside a centred field still belongs above its input, at the
+   reading edge — a centred label over a full-width input reads as a caption. */
+.page-header .field > label {
+  text-align: start;
+}
+
+/* The breadcrumb trail is navigation, not part of the heading, and centring it
+   would put it in the middle of nowhere above the eyebrow. */
+.page-header .breadcrumbs {
+  text-align: start;
 }
 
 /* -------------------------------------------------------- Section heading */

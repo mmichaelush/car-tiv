@@ -11,7 +11,11 @@
 
 import { hasNextPage, paginationWindow } from '@shared/core/pagination.js';
 import type { PageMeta } from '@shared/types/api.js';
-import { html, type SafeHtml } from '../dom.js';
+import {
+  countLabel,
+  html,
+  type SafeHtml,
+} from '../dom.js';
 import { icon } from '../icons.js';
 
 /** Numbered page controls. Buttons carry `data-page` for delegated handling. */
@@ -64,7 +68,7 @@ export function loadMore(meta: PageMeta): SafeHtml {
   return html`
     <div class="load-more">
       <button class="btn btn--secondary" type="button" data-load-more>הצגת סרטונים נוספים</button>
-      <p class="muted">נותרו ${Math.max(0, remaining).toLocaleString('he-IL')} סרטונים</p>
+      <p class="muted">נותרו ${countLabel(Math.max(0, remaining), 'סרטון', 'סרטונים')}</p>
     </div>
   `;
 }

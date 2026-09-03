@@ -10,7 +10,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { debounce, escape, html, mailtoUrl, raw, select, selectAll, setHtml } from '@src/ui/dom.js';
+import { countLabel, debounce, escape, html, mailtoUrl, raw, select, selectAll, setHtml } from '@src/ui/dom.js';
 
 describe('html', () => {
   it('escapes an interpolated value', () => {
@@ -126,5 +126,27 @@ describe('mailtoUrl', () => {
   it('carries both parts when both are given', () => {
     const url = mailtoUrl('a@b.com', { subject: 's', body: 'b' });
     expect(url).toBe('mailto:a@b.com?subject=s&body=b');
+  });
+});
+
+describe('countLabel', () => {
+  // `${n} סרטונים` reads as "1 videos" in Hebrew, and it appeared on channel
+  // cards, channel pages, playlists and the results bar. Hebrew also puts the
+  // noun before the numeral in the singular, so the fix is not a plural `s`.
+  it('says "סרטון אחד" rather than "1 סרטונים"', () => {
+    expect(countLabel(1, 'סרטון', 'סרטונים')).toBe('סרטון אחד');
+  });
+
+  it('takes the plural for zero, which is correct in Hebrew', () => {
+    expect(countLabel(0, 'סרטון', 'סרטונים')).toBe('0 סרטונים');
+  });
+
+  it('groups digits for a large count', () => {
+    expect(countLabel(7876, 'סרטון', 'סרטונים')).toBe('7,876 סרטונים');
+  });
+
+  it('works for any noun pair', () => {
+    expect(countLabel(1, 'ערוץ', 'ערוצים')).toBe('ערוץ אחד');
+    expect(countLabel(79, 'ערוץ', 'ערוצים')).toBe('79 ערוצים');
   });
 });

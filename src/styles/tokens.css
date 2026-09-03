@@ -80,12 +80,26 @@
   --space-9: 6rem;
 
   /* Type ramp. The display sizes are fluid so a phone does not get a 5rem
-     heading and a wide desktop does not get a small one. */
-  --text-xs: calc(0.75rem * var(--text-scale));
-  --text-sm: calc(0.8125rem * var(--text-scale));
-  --text-base: calc(0.9375rem * var(--text-scale));
-  --text-md: calc(1rem * var(--text-scale));
-  --text-lg: calc(1.125rem * var(--text-scale));
+     heading and a wide desktop does not get a small one.
+   *
+   * The bottom five steps were each one notch smaller than they are now — 12,
+   * 13, 15, 16 and 18px. That is a reasonable Latin ramp and a poor Hebrew one.
+   * Hebrew has no ascenders or descenders to speak of, so almost the whole
+   * letter is x-height and a Hebrew word set at 13px reads smaller than an
+   * English word at 13px, not the same. Card meta, tag chips, dates and
+   * captions — everything on this site that is set in `xs` or `sm` — were the
+   * places that came back as "small enough to be annoying".
+   *
+   * Each of those five is now one step up the same ramp: 13, 14, 16, 17, 19.
+   * The fluid display sizes are untouched; they were never the complaint, and
+   * moving them would change the whole page's rhythm rather than fix its
+   * smallest text. `--text-scale` still layers on top for anyone who wants
+   * more — see the accessibility settings. */
+  --text-xs: calc(0.8125rem * var(--text-scale));
+  --text-sm: calc(0.875rem * var(--text-scale));
+  --text-base: calc(1rem * var(--text-scale));
+  --text-md: calc(1.0625rem * var(--text-scale));
+  --text-lg: calc(1.1875rem * var(--text-scale));
   --text-xl: calc(clamp(1.25rem, 1.1rem + 0.6vw, 1.5rem) * var(--text-scale));
   --text-2xl: calc(clamp(1.5rem, 1.25rem + 1.1vw, 2rem) * var(--text-scale));
   --text-3xl: calc(clamp(1.875rem, 1.4rem + 2vw, 2.75rem) * var(--text-scale));

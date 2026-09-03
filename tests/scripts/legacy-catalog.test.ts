@@ -192,3 +192,76 @@ describe('summarizeIssues', () => {
     expect(summary[0]).toEqual({ level: 'warning', code: 'missing-description', count: 2 });
   });
 });
+
+describe('a channel spelled two ways', () => {
+  /**
+   * The legacy files spell a channel both as "ChrisFix | כריספיקס" and, on a
+   * handful of rows, as plain "ChrisFix". Keyed on the slug of the whole name
+   * those are two channels — and the catalog shipped exactly that: one with
+   * 256 videos in the directory, and one with a single video whose page looked
+   * like an abandoned channel.
+   */
+  const chris = (channel: string, id: string) => row({ channel, id });
+
+  it('folds the short spelling into the full one', () => {
+    const result = buildCatalog(
+      [
+        file([
+          chris('ChrisFix | כריספיקס', 'dQw4w9WgXcQ'),
+          chris('ChrisFix | כריספיקס', 'aQw4w9WgXcZ'),
+          chris('ChrisFix', 'bQw4w9WgXcY'),
+        ]),
+      ],
+      options,
+    );
+
+    const named = result.channels.filter((channel) => channel.name.startsWith('ChrisFix'));
+    expect(named).toHaveLength(1);
+    // The full name survives, because that is what the directory shows.
+    expect(named[0]?.name).toBe('ChrisFix | כריספיקס');
+    expect(named[0]?.videoCount).toBe(3);
+  });
+
+  it('moves the stray video to the surviving channel', () => {
+    // The half of the fix that is easy to forget: a merge that leaves the video
+    // pointing at a slug nobody has any more loses its channel entirely.
+    const result = buildCatalog(
+      [file([chris('ChrisFix | כריספיקס', 'dQw4w9WgXcQ'), chris('ChrisFix', 'bQw4w9WgXcY')])],
+      options,
+    );
+
+    const slugs = new Set(result.channels.map((channel) => channel.slug));
+    for (const video of result.videos) {
+      expect(video.channelSlug).not.toBeNull();
+      expect(slugs.has(video.channelSlug ?? '')).toBe(true);
+    }
+    expect(new Set(result.videos.map((video) => video.channelSlug)).size).toBe(1);
+  });
+
+  it('says so in the report rather than merging silently', () => {
+    const result = buildCatalog(
+      [file([chris('ChrisFix | כריספיקס', 'dQw4w9WgXcQ'), chris('ChrisFix', 'bQw4w9WgXcY')])],
+      options,
+    );
+
+    expect(result.issues.some((issue) => issue.code === 'merged-channel')).toBe(true);
+  });
+
+  it('leaves two genuinely different channels alone', () => {
+    // The rule is an exact prefix, not a resemblance. "ChrisFix Garage" is not
+    // "ChrisFix", and merging on a shared first word would be a worse bug than
+    // the one this fixes.
+    const result = buildCatalog(
+      [
+        file([
+          chris('ChrisFix | כריספיקס', 'dQw4w9WgXcQ'),
+          chris('ChrisFix Garage', 'bQw4w9WgXcY'),
+          chris('Fix It | תקן את זה', 'cQw4w9WgXcW'),
+        ]),
+      ],
+      options,
+    );
+
+    expect(result.channels).toHaveLength(3);
+  });
+});

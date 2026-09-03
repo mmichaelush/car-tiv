@@ -108,7 +108,8 @@ export interface ImportIssue {
     | 'invalid-date'
     | 'missing-duration'
     | 'missing-description'
-    | 'missing-channel';
+    | 'missing-channel'
+    | 'merged-channel';
   readonly fileName: string;
   readonly rowNumber: number;
   readonly videoId: string | null;
@@ -283,6 +284,8 @@ export function buildCatalog(
     }
   }
 
+  const merged = mergeSplitChannels(channels, videos, issues);
+
   const perCategory: Record<string, number> = {};
   for (const video of videos) {
     perCategory[video.categoryId] = (perCategory[video.categoryId] ?? 0) + 1;
@@ -290,7 +293,7 @@ export function buildCatalog(
 
   return {
     videos,
-    channels: [...channels.values()].sort((a, b) => b.videoCount - a.videoCount),
+    channels: [...merged.values()].sort((a, b) => b.videoCount - a.videoCount),
     tags: [...tags.values()].sort((a, b) => b.videoCount - a.videoCount),
     issues,
     summary: {
@@ -300,7 +303,7 @@ export function buildCatalog(
       duplicates,
       errors: issues.filter((issue) => issue.level === 'error').length,
       warnings: issues.filter((issue) => issue.level === 'warning').length,
-      channels: channels.size,
+      channels: merged.size,
       tags: tags.size,
       withVehicle: videos.filter((video) => video.vehicles.length > 0).length,
       perCategory,
@@ -311,6 +314,80 @@ export function buildCatalog(
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+/**
+ * Fold a channel that is the bare Latin half of another channel's full name.
+ *
+ * The legacy data spells a channel two ways. Most rows say
+ * "ChrisFix | כריספיקס"; a handful say just "ChrisFix". Keyed on the slug of
+ * the whole name those are two channels, so the catalog carried "ChrisFix"
+ * with 1 video beside "ChrisFix | כריספיקס" with 256 — and the video that
+ * happened to use the short spelling linked to a channel page that looked
+ * abandoned, while the real one sat elsewhere in the directory.
+ *
+ * Four channels are affected, every one a single stray video against a
+ * hundreds-strong sibling, and every match is exact rather than fuzzy: the
+ * short name, slugified, equals the other name's text before the pipe,
+ * slugified. That is narrow enough to be safe and wide enough to fix all four.
+ * Anything looser — a shared first word, say — would start merging channels
+ * that are genuinely different, which is a worse bug than the one being fixed.
+ *
+ * The row that survives is the one carrying the pipe, because the full name is
+ * what the directory should show; it inherits the stray's videos and its
+ * avatar if it had none. Every merge is reported, so a spelling that begins
+ * colliding for a bad reason appears in the build output instead of silently
+ * swallowing a channel.
+ */
+function mergeSplitChannels(
+  channels: Map<string, NormalizedChannel>,
+  videos: NormalizedVideo[],
+  issues: ImportIssue[],
+): Map<string, NormalizedChannel> {
+  /** A channel's identity without its Hebrew half. */
+  const identity = (name: string): string => slugify(name.split('|')[0] ?? name);
+
+  /** Only a name carrying the separator can absorb one that does not. */
+  const full = [...channels.values()].filter((channel) => channel.name.includes('|'));
+  const keepers = new Map<string, NormalizedChannel>();
+  for (const channel of full) keepers.set(identity(channel.name), channel);
+
+  const replaces = new Map<string, string>();
+  for (const channel of channels.values()) {
+    if (channel.name.includes('|')) continue;
+
+    const keeper = keepers.get(identity(channel.name));
+    if (keeper == null || keeper.slug === channel.slug) continue;
+
+    replaces.set(channel.slug, keeper.slug);
+    keeper.videoCount += channel.videoCount;
+    keeper.imageUrl ??= channel.imageUrl;
+    issues.push({
+      level: 'warning',
+      code: 'merged-channel',
+      fileName: '',
+      rowNumber: 0,
+      videoId: null,
+      message: `ערוץ "${channel.name}" מוזג לתוך "${keeper.name}"`,
+    });
+  }
+
+  if (replaces.size === 0) return channels;
+
+  // The videos have to follow, or they point at a slug that no longer exists
+  // and lose their channel entirely.
+  for (let index = 0; index < videos.length; index += 1) {
+    const video = videos[index];
+    if (video?.channelSlug == null) continue;
+    const moved = replaces.get(video.channelSlug);
+    if (moved != null) videos[index] = { ...video, channelSlug: moved };
+  }
+
+  const kept = new Map<string, NormalizedChannel>();
+  for (const channel of channels.values()) {
+    if (!replaces.has(channel.slug)) kept.set(channel.slug, channel);
+  }
+  return kept;
+}
 
 /**
  * Register the row's channel, merging duplicates by slug.

@@ -13,7 +13,15 @@ import { library } from '../data/library-repository.js';
 import { confirmDialog, openDialog } from '../ui/components/dialog.js';
 import { emptyState, videoRow } from '../ui/components/video-card.js';
 import { toastSuccess } from '../ui/components/toast.js';
-import { delegate, html, on, select, setHtml, type SafeHtml } from '../ui/dom.js';
+import {
+  countLabel,
+  delegate,
+  html,
+  on,
+  select,
+  setHtml,
+  type SafeHtml,
+} from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 
 startPage({ active: 'library' });
@@ -100,7 +108,9 @@ function renderList(list: LibraryListName, entries: readonly LibraryEntry[]): Sa
   return html`
     <div class="result-bar">
       <span>${entries.length} פריטים</span>
-      <button type="button" class="btn btn--ghost" data-action="clear">ניקוי הרשימה</button>
+      <button type="button" class="btn btn--ghost" data-action="clear">
+        ${icon('trash', { size: 16 })} ניקוי הרשימה
+      </button>
     </div>
     <div class="stack">
       ${entries.map((entry) =>
@@ -114,7 +124,7 @@ function renderList(list: LibraryListName, entries: readonly LibraryEntry[]): Sa
                 data-action="remove"
                 data-video-id="${entry.videoId}"
               >
-                הסרה
+                ${icon('close', { size: 16 })} הסרה
               </button>
             </div>`,
       )}
@@ -144,7 +154,7 @@ function renderPlaylists(playlists: readonly Playlist[]): SafeHtml {
                   <div class="result-bar" style="margin:0">
                     <div>
                       <h3>${playlist.name}</h3>
-                      <p class="muted">${playlist.itemCount} סרטונים</p>
+                      <p class="muted">${countLabel(playlist.itemCount, 'סרטון', 'סרטונים')}</p>
                     </div>
                     <div class="result-bar__tools">
                       <button
@@ -347,8 +357,12 @@ function promptForName(title: string, label: string, onSubmit: (value: string) =
       </div>
     `,
     footer: html`
-      <button type="button" class="btn btn--secondary" data-cancel>ביטול</button>
-      <button type="button" class="btn btn--primary" data-ok>שמירה</button>
+      <button type="button" class="btn btn--secondary" data-cancel>
+        ${icon('close', { size: 16 })} ביטול
+      </button>
+      <button type="button" class="btn btn--primary" data-ok>
+        ${icon('check', { size: 16 })} שמירה
+      </button>
     `,
   });
 
@@ -402,8 +416,12 @@ function openVehicleDialog(): void {
       </div>
     `,
     footer: html`
-      <button type="button" class="btn btn--secondary" data-cancel>ביטול</button>
-      <button type="button" class="btn btn--primary" data-ok>שמירה</button>
+      <button type="button" class="btn btn--secondary" data-cancel>
+        ${icon('close', { size: 16 })} ביטול
+      </button>
+      <button type="button" class="btn btn--primary" data-ok>
+        ${icon('check', { size: 16 })} שמירה
+      </button>
     `,
   });
 

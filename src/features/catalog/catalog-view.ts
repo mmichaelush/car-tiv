@@ -26,6 +26,7 @@ import { library } from '../../data/library-repository.js';
 import {
   appendHtml,
   byData,
+  countLabel,
   debounce,
   delegate,
   formatCount,
@@ -144,7 +145,7 @@ export function mountCatalogView(options: CatalogViewOptions): CatalogViewHandle
     const text =
       meta.total === 0
         ? 'לא נמצאו סרטונים'
-        : `${formatCount(meta.total)} סרטונים${query.q.length > 0 ? ` עבור "${query.q}"` : ''}`;
+        : `${countLabel(meta.total, 'סרטון', 'סרטונים')}${query.q.length > 0 ? ` עבור "${query.q}"` : ''}`;
     setHtml(resultSummary, html`${text}`);
   };
 

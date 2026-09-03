@@ -18,7 +18,14 @@ import { mountCarousel } from '../ui/components/carousel.js';
 import { categoryGrid } from '../ui/components/category-card.js';
 import { mountSearchBox } from '../ui/components/search-box.js';
 import { errorState, skeletonGrid, videoGrid } from '../ui/components/video-card.js';
-import { byData, formatCount, html, select, setHtml } from '../ui/dom.js';
+import {
+  byData,
+  countLabel,
+  formatCount,
+  html,
+  select,
+  setHtml,
+} from '../ui/dom.js';
 
 startPage({ active: 'home', headerSearch: false });
 
@@ -170,7 +177,7 @@ function renderChannels(channels: readonly Channel[]): void {
             <h3><a href="${channelPath(channel.slug)}">${channel.name}</a></h3>
             <p>${channel.description}</p>
             <p class="channel-card__meta">
-              ${channel.videoCount == null ? '' : `${formatCount(channel.videoCount)} סרטונים`}
+              ${channel.videoCount == null ? '' : countLabel(channel.videoCount, 'סרטון', 'סרטונים')}
             </p>
           </div>
         </article>

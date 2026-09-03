@@ -10,7 +10,16 @@ import { catalog } from '../data/catalog-repository.js';
 import { mountBreadcrumbs } from '../ui/components/breadcrumbs.js';
 import { emptyState, errorState } from '../ui/components/video-card.js';
 import { pagination } from '../ui/components/pagination.js';
-import { debounce, delegate, formatCount, html, on, select, setHtml } from '../ui/dom.js';
+import {
+  countLabel,
+  debounce,
+  delegate,
+  formatCount,
+  html,
+  on,
+  select,
+  setHtml,
+} from '../ui/dom.js';
 
 startPage({ active: 'channels' });
 
@@ -105,14 +114,14 @@ function render(channels: readonly Channel[], meta: PageMeta): void {
                  middle-click, "open in new tab" and screen readers still see a
                  single ordinary link. The channel page it opens lists every
                  video of theirs. -->
-            <h3><a href="${channelPath(channel.slug)}">${channel.name}</a></h3>
+            <h3><a href="${channelPath(channel.slug)}"><bdi>${channel.name}</bdi></a></h3>
             <p>${channel.description}</p>
             <p class="channel-card__meta">
               ${
                 // No "מומלץ". Every channel in this catalog is one whose videos
                 // passed the same check, so a badge on some of them says nothing
                 // a visitor can act on — it only implies the others are worse.
-                channel.videoCount == null ? '' : `${formatCount(channel.videoCount)} סרטונים`
+                channel.videoCount == null ? '' : countLabel(channel.videoCount, 'סרטון', 'סרטונים')
               }
             </p>
           </div>
