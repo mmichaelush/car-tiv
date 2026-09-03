@@ -116,7 +116,12 @@ const CHECKS: readonly Check[] = [
   { name: 'muted text', foreground: '--text-muted', background: '--bg', minimum: AA_TEXT },
   { name: 'subtle text', foreground: '--text-subtle', background: '--bg', minimum: AA_LARGE },
   { name: 'text on a card', foreground: '--text', background: '--surface', minimum: AA_TEXT },
-  { name: 'muted on a card', foreground: '--text-muted', background: '--surface', minimum: AA_TEXT },
+  {
+    name: 'muted on a card',
+    foreground: '--text-muted',
+    background: '--surface',
+    minimum: AA_TEXT,
+  },
   { name: 'brand link', foreground: '--brand', background: '--bg', minimum: AA_LARGE },
   { name: 'brand on a card', foreground: '--brand', background: '--surface', minimum: AA_LARGE },
   { name: 'text on the brand', foreground: '--on-brand', background: '--brand', minimum: AA_TEXT },

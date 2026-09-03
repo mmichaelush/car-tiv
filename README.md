@@ -40,7 +40,7 @@ npm run dev:worker   # ה-API, על http://localhost:8787
 | `npm run verify`               | פורמט + lint + טיפוסים + בדיקות — מה שרץ ב-CI      |
 | `npm test`                     | בדיקות בלבד                                        |
 | `npm run typecheck`            | בדיקת טיפוסים בחמשת הפרויקטים                      |
-| `npm run check:contrast`       | כל 20 ערכות הנושא ביום ובלילה מול תקן WCAG          |
+| `npm run check:contrast`       | כל 20 ערכות הנושא ביום ובלילה מול תקן WCAG         |
 | `npm run catalog:build`        | יצירת קובצי SQL ודוח ייבוא מ-`data/videos`         |
 | `npm run catalog:import:local` | החלת קובצי הייבוא על D1 המקומי                     |
 | `npm run static:build`         | יצירת תמונת מצב סטטית של הקטלוג (מצב חירום)        |

@@ -34,7 +34,11 @@ import { SearchIndexRepository } from '@worker/repositories/search-index-reposit
 import { VideoRepository } from '@worker/repositories/video-repository.js';
 import type { VideoId } from '@shared/types/catalog.js';
 import { MaintenanceService, LINK_CHECK_BATCH } from '@worker/services/maintenance-service.js';
-import { MAX_BOUND_PARAMETERS, MAX_LIKE_PATTERN_BYTES, likePattern } from '@worker/repositories/base.js';
+import {
+  MAX_BOUND_PARAMETERS,
+  MAX_LIKE_PATTERN_BYTES,
+  likePattern,
+} from '@worker/repositories/base.js';
 import { CatalogRepository } from '@worker/repositories/catalog-repository.js';
 import { SearchRepository } from '@worker/repositories/search-repository.js';
 import { SEARCH } from '@shared/constants.js';
@@ -443,7 +447,6 @@ describe('an admin or import request stays inside one Worker invocation', () => 
     }));
 
     const statements = await cost(() =>
-       
       imports.importBatch(job!, rows, {
         updateExisting: false,
         status: 'published',
@@ -462,8 +465,13 @@ describe('an admin or import request stays inside one Worker invocation', () => 
     // had.
     const imports = new ImportRepository(db);
     const jobId = await imports.createJob('catalog.csv', 'csv', 2, {}, null);
-    const categoryId = db.queryRaw<{ id: string }>(`SELECT id FROM categories LIMIT 1`)[0]?.id ?? '';
-    const options = { updateExisting: false, status: 'published' as const, defaultCategoryId: categoryId };
+    const categoryId =
+      db.queryRaw<{ id: string }>(`SELECT id FROM categories LIMIT 1`)[0]?.id ?? '';
+    const options = {
+      updateExisting: false,
+      status: 'published' as const,
+      defaultCategoryId: categoryId,
+    };
     const rows = [
       {
         rowNumber: 1,
@@ -484,13 +492,13 @@ describe('an admin or import request stays inside one Worker invocation', () => 
 
     const first = await imports.findJob(jobId);
     expect(first).not.toBeNull();
-     
+
     expect((await imports.importBatch(first!, rows, options)).imported).toBe(1);
 
     const second = await imports.findJob(jobId);
-     
+
     expect(second!.lastRowNumber).toBe(1);
-     
+
     expect(await imports.importBatch(second!, rows, options)).toEqual({
       imported: 0,
       updated: 0,
@@ -498,7 +506,6 @@ describe('an admin or import request stays inside one Worker invocation', () => 
       failed: 0,
     });
 
-     
     expect((await imports.findJob(jobId))!.importedRows).toBe(1);
   });
 

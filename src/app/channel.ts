@@ -7,12 +7,7 @@ import { startPage } from './bootstrap.js';
 import { catalog } from '../data/catalog-repository.js';
 import { mountCatalogView } from '../features/catalog/catalog-view.js';
 import { mountBreadcrumbs } from '../ui/components/breadcrumbs.js';
-import {
-  countLabel,
-  html,
-  select,
-  setHtml,
-} from '../ui/dom.js';
+import { countLabel, html, select, setHtml } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 
 startPage({ active: 'channels' });

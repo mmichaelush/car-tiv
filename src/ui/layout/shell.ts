@@ -171,7 +171,12 @@ function renderRail(options: ShellOptions): void {
                   <div class="suggestions" data-suggestions hidden></div>
                 </div>
               </form>
-              <a class="site-rail__search-icon" href="${ROUTES.search}" aria-label="חיפוש" title="חיפוש">
+              <a
+                class="site-rail__search-icon"
+                href="${ROUTES.search}"
+                aria-label="חיפוש"
+                title="חיפוש"
+              >
                 <span class="site-rail__icon">${icon('search', { size: 20 })}</span>
               </a>
             `

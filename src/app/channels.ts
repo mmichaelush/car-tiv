@@ -114,7 +114,9 @@ function render(channels: readonly Channel[], meta: PageMeta): void {
                  middle-click, "open in new tab" and screen readers still see a
                  single ordinary link. The channel page it opens lists every
                  video of theirs. -->
-            <h3><a href="${channelPath(channel.slug)}"><bdi>${channel.name}</bdi></a></h3>
+            <h3>
+              <a href="${channelPath(channel.slug)}"><bdi>${channel.name}</bdi></a>
+            </h3>
             <p>${channel.description}</p>
             <p class="channel-card__meta">
               ${

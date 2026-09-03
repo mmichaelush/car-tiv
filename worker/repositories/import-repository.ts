@@ -228,7 +228,8 @@ export class ImportRepository extends BaseRepository {
       // A category named by id or by name, falling back to the one the editor
       // chose. Never created: the ten are curated, and a typo in a spreadsheet
       // must not add an eleventh.
-      const named = draft.categoryId == null ? null : categories.get(draft.categoryId.toLowerCase());
+      const named =
+        draft.categoryId == null ? null : categories.get(draft.categoryId.toLowerCase());
       writes.push({
         row,
         categoryId: named ?? fallback,

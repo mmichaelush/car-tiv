@@ -10,7 +10,17 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
-import { countLabel, debounce, escape, html, mailtoUrl, raw, select, selectAll, setHtml } from '@src/ui/dom.js';
+import {
+  countLabel,
+  debounce,
+  escape,
+  html,
+  mailtoUrl,
+  raw,
+  select,
+  selectAll,
+  setHtml,
+} from '@src/ui/dom.js';
 
 describe('html', () => {
   it('escapes an interpolated value', () => {

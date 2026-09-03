@@ -18,14 +18,7 @@ import { mountCarousel } from '../ui/components/carousel.js';
 import { categoryGrid } from '../ui/components/category-card.js';
 import { mountSearchBox } from '../ui/components/search-box.js';
 import { errorState, skeletonGrid, videoGrid } from '../ui/components/video-card.js';
-import {
-  byData,
-  countLabel,
-  formatCount,
-  html,
-  select,
-  setHtml,
-} from '../ui/dom.js';
+import { byData, countLabel, formatCount, html, select, setHtml } from '../ui/dom.js';
 
 startPage({ active: 'home', headerSearch: false });
 
@@ -188,4 +181,3 @@ function renderChannels(channels: readonly Channel[]): void {
   // The rail only knows whether it can scroll once it has content in it.
   channelCarousel.refresh();
 }
-

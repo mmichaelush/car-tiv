@@ -82,7 +82,13 @@ export function chunkForBindings<T>(
  * Used to derive the admin bulk ceiling from the query budget rather than
  * choosing a round number and hoping. See `MAX_BULK_IDS`.
  */
-export function chunkSize({ perItem = 1, fixed = 0 }: { perItem?: number; fixed?: number }): number {
+export function chunkSize({
+  perItem = 1,
+  fixed = 0,
+}: {
+  perItem?: number;
+  fixed?: number;
+}): number {
   return Math.max(1, Math.floor((MAX_BOUND_PARAMETERS - fixed - BINDING_RESERVE) / perItem));
 }
 
@@ -135,9 +141,8 @@ export function likePattern(value: string): string {
   let escaped = '';
   let bytes = 0;
   for (const character of value) {
-    const piece = character === '\\' || character === '%' || character === '_'
-      ? `\\${character}`
-      : character;
+    const piece =
+      character === '\\' || character === '%' || character === '_' ? `\\${character}` : character;
     const size = encoder.encode(piece).length;
     if (bytes + size > budget) break;
     escaped += piece;

@@ -13,15 +13,7 @@ import { library } from '../data/library-repository.js';
 import { confirmDialog, openDialog } from '../ui/components/dialog.js';
 import { emptyState, videoRow } from '../ui/components/video-card.js';
 import { toastSuccess } from '../ui/components/toast.js';
-import {
-  countLabel,
-  delegate,
-  html,
-  on,
-  select,
-  setHtml,
-  type SafeHtml,
-} from '../ui/dom.js';
+import { countLabel, delegate, html, on, select, setHtml, type SafeHtml } from '../ui/dom.js';
 import { icon } from '../ui/icons.js';
 
 startPage({ active: 'library' });

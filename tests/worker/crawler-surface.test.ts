@@ -117,7 +117,9 @@ describe('the sitemap a crawler is handed', () => {
   it('does not advertise a channel page that would be empty', async () => {
     // A sitemap full of empty pages is how a site teaches a crawler to trust
     // it less, so a channel with nothing published is left out.
-    db.runRaw(`INSERT INTO channels (slug, name, is_visible, video_count) VALUES ('quiet', 'ערוץ ריק', 1, 0)`);
+    db.runRaw(
+      `INSERT INTO channels (slug, name, is_visible, video_count) VALUES ('quiet', 'ערוץ ריק', 1, 0)`,
+    );
     const body = await (await api.fetch('/sitemap-pages.xml')).text();
 
     expect(body).not.toContain('/channel/quiet');

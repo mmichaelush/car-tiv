@@ -11,11 +11,7 @@
 
 import { hasNextPage, paginationWindow } from '@shared/core/pagination.js';
 import type { PageMeta } from '@shared/types/api.js';
-import {
-  countLabel,
-  html,
-  type SafeHtml,
-} from '../dom.js';
+import { countLabel, html, type SafeHtml } from '../dom.js';
 import { icon } from '../icons.js';
 
 /** Numbered page controls. Buttons carry `data-page` for delegated handling. */

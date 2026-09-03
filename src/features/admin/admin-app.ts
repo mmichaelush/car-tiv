@@ -117,7 +117,9 @@ function renderLogin(root: HTMLElement, message?: string): void {
             />
             ${message == null ? '' : html`<span class="field-error">${message}</span>`}
           </div>
-          <button class="btn btn--primary" type="submit">${icon('lock', { size: 18 })} כניסה</button>
+          <button class="btn btn--primary" type="submit">
+            ${icon('lock', { size: 18 })} כניסה
+          </button>
         </form>
       </div>
     `,

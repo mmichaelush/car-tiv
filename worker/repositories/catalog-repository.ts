@@ -386,4 +386,3 @@ function toChannel(row: ChannelRow): Channel {
 function toTag(row: TagRow): Tag {
   return { id: row.id, slug: row.slug, name: row.name, videoCount: row.videoCount };
 }
-
