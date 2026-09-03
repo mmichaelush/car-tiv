@@ -35,7 +35,20 @@ import process from 'node:process';
 import path from 'node:path';
 import { createServer } from 'node:http';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { chromium } from 'playwright';
+// `playwright-core`, not `playwright`.
+//
+// Two reasons, and the second is why CI broke. The first: this script points
+// `executablePath` at a Chromium that is already on the machine, so the browser
+// management `playwright` adds — a postinstall that downloads three browsers —
+// is pure cost. `playwright-core` is the same driver with none of it.
+//
+// The second: `playwright` was never in `package.json` at all. It happened to
+// be present in this workspace's `node_modules`, so everything passed locally
+// while `npm ci` on a clean checkout installed nothing, TypeScript resolved the
+// import to `error`, and twenty-eight `no-unsafe-*` rules fired at once. An
+// import that is not a declared dependency is a lint failure waiting for a
+// clean machine.
+import { chromium } from 'playwright-core';
 
 /**
  * The page the themes are read from. Any built page will do.
