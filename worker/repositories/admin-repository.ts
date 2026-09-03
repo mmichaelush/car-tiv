@@ -20,11 +20,11 @@ import {
   ConditionBuilder,
   LIST_SEPARATOR,
   chunkForBindings,
+  likePattern,
   placeholders,
   splitList,
   type Binding,
 } from './base.js';
-import { escapeLike } from './catalog-repository.js';
 
 /** A row in the admin videos table. */
 export interface AdminVideoRow {
@@ -146,7 +146,7 @@ export class AdminRepository extends BaseRepository {
     // The admin search is intentionally a LIKE over title and id rather than
     // FTS: an editor searches for a fragment or a YouTube id, not for prose.
     if (query.q != null && query.q.trim().length > 0) {
-      const pattern = `%${escapeLike(query.q.trim())}%`;
+      const pattern = likePattern(query.q.trim());
       conditions.add(
         `(v.id LIKE ? ESCAPE ${String.raw`'\'`} OR v.title LIKE ? ESCAPE ${String.raw`'\'`} OR ch.name LIKE ? ESCAPE ${String.raw`'\'`})`,
         pattern,

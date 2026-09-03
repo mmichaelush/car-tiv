@@ -92,6 +92,62 @@ export function placeholders(count: number): string {
 }
 
 /**
+ * D1's ceiling on a `LIKE` or `GLOB` pattern.
+ *
+ * Fifty **bytes**, which is the detail that matters on a Hebrew site: UTF-8
+ * spends two bytes on every Hebrew letter, so this is twenty-four letters, not
+ * fifty — and the two `%` wildcards are part of the budget. A longer pattern is
+ * not truncated by SQLite, it is rejected: "LIKE or GLOB pattern too complex",
+ * which this layer turns into a 503. Someone pasting a sentence into the
+ * channel filter or the admin search would have been told the database was
+ * down.
+ *
+ * `node:sqlite`, which the tests run on, uses SQLite's own default of 50,000,
+ * so this is invisible from inside the test suite — hence the truncation
+ * happening in one shared function that every call site is required to use,
+ * rather than a rule each query has to remember.
+ *
+ * @see https://developers.cloudflare.com/d1/platform/limits/
+ */
+export const MAX_LIKE_PATTERN_BYTES = 50;
+
+/**
+ * A `%contains%` pattern, escaped and short enough for D1 to accept.
+ *
+ * Escaping and truncation belong together: truncating first can cut a pattern
+ * between a backslash and the wildcard it escapes, which either changes what
+ * the pattern matches or leaves a dangling escape. Building the pattern one
+ * character at a time and stopping before the budget is exceeded cannot split
+ * an escape pair, and — because it iterates code points rather than UTF-16
+ * units — cannot split a character either.
+ *
+ * Truncating rather than rejecting is deliberate. This is a search box: a long
+ * query is a paste or a probe, and returning the results for its first two
+ * dozen letters is a better answer than an error. The results are a superset of
+ * what the full pattern would have matched, which for a substring search is the
+ * right direction to be wrong in.
+ */
+export function likePattern(value: string): string {
+  // Two of the fifty bytes are the wildcards this function adds itself.
+  const budget = MAX_LIKE_PATTERN_BYTES - 2;
+  const encoder = new TextEncoder();
+
+  let escaped = '';
+  let bytes = 0;
+  for (const character of value) {
+    const piece = character === '\\' || character === '%' || character === '_'
+      ? `\\${character}`
+      : character;
+    const size = encoder.encode(piece).length;
+    if (bytes + size > budget) break;
+    escaped += piece;
+    bytes += size;
+  }
+
+  return `%${escaped}%`;
+}
+
+/**
  * A WHERE clause under construction.
  *
  * Conditions and their bindings are appended together, which makes it

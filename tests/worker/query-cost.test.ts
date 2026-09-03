@@ -38,6 +38,7 @@ import { CountersRepository } from '@worker/repositories/counters-repository.js'
 import { VideoRepository } from '@worker/repositories/video-repository.js';
 import { EMPTY_QUERY } from '@shared/core/query.js';
 import { PAGE_REQUEST_COST, PLAN_LIMITS, TYPICAL_VISIT_REQUESTS } from '@shared/constants.js';
+import { SearchRepository } from '@worker/repositories/search-repository.js';
 import { RateLimitRepository, RATE_LIMITS } from '@worker/repositories/rate-limit-repository.js';
 import type { VideoId, VideoQuery } from '@shared/types/catalog.js';
 import { createTestDatabase, type RecordedStatement, type TestDatabase } from '../helpers/d1.js';
@@ -492,5 +493,71 @@ describe('the counter refresh on a cold database', () => {
       db.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM channels WHERE video_count > 0`)[0]?.n,
     ).toBeGreaterThan(0);
     expect(db.queryRaw(`SELECT 1 FROM catalog_counters`).length).toBeGreaterThan(0);
+  });
+});
+
+describe('what one search costs the write budget', () => {
+  /**
+   * `logSearch` upserts one row per (day, normalised query) on every search
+   * that reaches the Worker. One statement, but not necessarily one row write:
+   * an upsert also rewrites every index entry whose columns changed.
+   *
+   * `migrations/0009` created two indexes keyed on `hits` and `zero_hits` —
+   * the two columns that change on literally every search — so the cheap-
+   * looking statement cost two row writes, or three when the search found
+   * nothing. `migrations/0012` re-keyed both on `day` alone, which neither
+   * report could tell apart (both group across days and order on the
+   * aggregate, which no index over the individual rows can satisfy).
+   *
+   * This test is the guard, because the failure mode is a future index added
+   * for a reasonable-sounding reporting reason that silently doubles the write
+   * cost of a public endpoint.
+   */
+  it('indexes the search log on nothing that changes when a counter increments', async () => {
+    const db = await createTestDatabase();
+    seedCatalog(db);
+
+    const counters = new Set(['hits', 'zero_hits', 'result_count', 'updated_at']);
+    const indexes = db.queryRaw<{ name: string }>(
+      `SELECT name FROM pragma_index_list('search_query_daily')`,
+    );
+
+    expect(indexes.length).toBeGreaterThan(0);
+    for (const index of indexes) {
+      const columns = db
+        .queryRaw<{ name: string | null }>(`SELECT name FROM pragma_index_info(?)`, index.name)
+        .map((column) => column.name);
+
+      for (const column of columns) {
+        expect(
+          column == null || !counters.has(column),
+          `${index.name} is keyed on ${String(column)}, which changes on every search`,
+        ).toBe(true);
+      }
+    }
+
+    db.close();
+  });
+
+  it('still answers both reports from the rollup', async () => {
+    // The indexes only earn their place if the reports still work off them,
+    // so this asserts the behaviour the migration is allowed to change nothing
+    // about.
+    const db = await createTestDatabase();
+    seedCatalog(db);
+    const searches = new SearchRepository(db);
+
+    await searches.logSearch('מזגן ברכב', 4, null);
+    await searches.logSearch('מזגן ברכב', 4, null);
+    await searches.logSearch('משהו שאין', 0, null);
+
+    const popular = await searches.popularSearches('2000-01-01', 10);
+    expect(popular[0]?.hits).toBe(2);
+
+    const zero = await searches.zeroResultSearches('2000-01-01', 10);
+    expect(zero).toHaveLength(1);
+    expect(zero[0]?.rawQuery).toBe('משהו שאין');
+
+    db.close();
   });
 });

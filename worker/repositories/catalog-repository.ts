@@ -10,7 +10,7 @@ import { PAGINATION, TAGS } from '@shared/constants.js';
 import { buildPageMeta, clampLimit, clampPage, offsetFor } from '@shared/core/pagination.js';
 import type { Page } from '@shared/types/api.js';
 import type { CatalogStats, Category, Channel, Tag } from '@shared/types/catalog.js';
-import { BaseRepository, ConditionBuilder, toBoolean } from './base.js';
+import { BaseRepository, ConditionBuilder, likePattern, toBoolean } from './base.js';
 
 interface CategoryRow {
   id: string;
@@ -132,7 +132,7 @@ export class CatalogRepository extends BaseRepository {
     conditions.addIf(
       options.q != null && options.q.length > 0,
       'ch.name LIKE ? ESCAPE ' + String.raw`'\'`,
-      `%${escapeLike(options.q ?? '')}%`,
+      likePattern(options.q ?? ''),
     );
 
     const where = conditions.whereClause();
@@ -233,7 +233,7 @@ export class CatalogRepository extends BaseRepository {
   ): Promise<Tag[]> {
     if (q.trim().length === 0) return [];
     const capped = clampLimit(limit, TAGS.maxSuggestions);
-    const pattern = `%${escapeLike(q)}%`;
+    const pattern = likePattern(q);
 
     if (category === 'all') {
       const rows = await this.all<TagRow>(
@@ -358,10 +358,3 @@ function toTag(row: TagRow): Tag {
   return { id: row.id, slug: row.slug, name: row.name, videoCount: row.videoCount };
 }
 
-/**
- * Escape the wildcards in a `LIKE` pattern.
- * Without this, a visitor typing `%` would match every row.
- */
-export function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
-}

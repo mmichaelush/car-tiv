@@ -34,7 +34,10 @@ import { SearchIndexRepository } from '@worker/repositories/search-index-reposit
 import { VideoRepository } from '@worker/repositories/video-repository.js';
 import type { VideoId } from '@shared/types/catalog.js';
 import { MaintenanceService, LINK_CHECK_BATCH } from '@worker/services/maintenance-service.js';
-import { MAX_BOUND_PARAMETERS } from '@worker/repositories/base.js';
+import { MAX_BOUND_PARAMETERS, MAX_LIKE_PATTERN_BYTES, likePattern } from '@worker/repositories/base.js';
+import { CatalogRepository } from '@worker/repositories/catalog-repository.js';
+import { SearchRepository } from '@worker/repositories/search-repository.js';
+import { SEARCH } from '@shared/constants.js';
 import { MAX_BULK_IDS, PLAN_LIMITS } from '@shared/constants.js';
 import { idsSchema } from '@worker/routes/admin-routes.js';
 import { IMPORT_BATCH_SIZE } from '@worker/routes/import-routes.js';
@@ -512,5 +515,84 @@ describe('an admin or import request stays inside one Worker invocation', () => 
     expect(idsSchema.safeParse({ ids: ids(MAX_BULK_IDS) }).success).toBe(true);
     expect(idsSchema.safeParse({ ids: ids(MAX_BULK_IDS + 1) }).success).toBe(false);
     expect(idsSchema.safeParse({ ids: [] }).success).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// The 50-byte LIKE pattern limit
+// ---------------------------------------------------------------------------
+
+describe('no LIKE pattern exceeds what D1 accepts', () => {
+  /**
+   * D1 rejects a `LIKE` or `GLOB` pattern longer than 50 **bytes** with "LIKE
+   * or GLOB pattern too complex", which this code base turns into a 503.
+   *
+   * Fifty bytes is twenty-four Hebrew letters, because UTF-8 spends two bytes
+   * on each one — so this is not a limit only a paste could reach. It is a
+   * sentence in the channel filter, or a long car model in the admin search.
+   *
+   * `node:sqlite` uses SQLite's own default of 50,000, so nothing in this suite
+   * would ever hit it by accident. These tests assert the shape of the pattern
+   * directly for that reason.
+   */
+  const bytes = (value: string): number => new TextEncoder().encode(value).length;
+
+  it('truncates a long Hebrew query to something D1 will run', () => {
+    // Forty Hebrew letters is eighty bytes — well over — and reads like a real
+    // over-long search rather than a synthetic one.
+    const pattern = likePattern('מזגן ברכב שלא מקרר טוב אחרי החלפת מדחס וגז'.repeat(2));
+
+    expect(bytes(pattern)).toBeLessThanOrEqual(MAX_LIKE_PATTERN_BYTES);
+    expect(pattern.startsWith('%')).toBe(true);
+    expect(pattern.endsWith('%')).toBe(true);
+  });
+
+  it('leaves a normal query completely alone', () => {
+    // The limit must not quietly change what ordinary searches match.
+    expect(likePattern('קורולה')).toBe('%קורולה%');
+    expect(likePattern('brake pads')).toBe('%brake pads%');
+  });
+
+  it('still escapes the wildcards', () => {
+    // Without this a visitor typing `%` matches every row in the table.
+    expect(likePattern('100%')).toBe(String.raw`%100\%%`);
+    expect(likePattern('a_b')).toBe(String.raw`%a\_b%`);
+  });
+
+  it('never cuts a pattern between an escape and what it escapes', () => {
+    // The bug that truncating *after* escaping would produce: a trailing
+    // backslash with nothing behind it, which changes what the pattern matches
+    // and can make it invalid.
+    for (let length = 1; length < 80; length += 1) {
+      const pattern = likePattern('%'.repeat(length));
+      expect(bytes(pattern)).toBeLessThanOrEqual(MAX_LIKE_PATTERN_BYTES);
+      // Every backslash is followed by the character it escapes.
+      expect(/(?:^|[^\\])(?:\\\\)*\\$/.test(pattern.slice(1, -1))).toBe(false);
+    }
+  });
+
+  it('never cuts a character in half', () => {
+    // Iterating code points rather than UTF-16 units is what makes this true
+    // for emoji and other astral characters as well as for Hebrew.
+    for (let length = 1; length < 40; length += 1) {
+      const pattern = likePattern('🚗'.repeat(length));
+      expect(bytes(pattern)).toBeLessThanOrEqual(MAX_LIKE_PATTERN_BYTES);
+      expect(pattern).not.toContain('�');
+      expect([...pattern].every((character) => character === '%' || character === '🚗')).toBe(true);
+    }
+  });
+
+  it('holds for every query the API will accept', async () => {
+    // The end-to-end version: `SEARCH.maxQueryLength` is 120 characters, which
+    // in Hebrew is 240 bytes. Every repository that builds a pattern from a
+    // visitor's text has to go through `likePattern`, and this is the check
+    // that they do — it runs the real queries with a query at that ceiling.
+    const long = 'מזגן'.repeat(30).slice(0, SEARCH.maxQueryLength);
+    const catalog = new CatalogRepository(db);
+
+    await expect(catalog.searchTags(long, 'all')).resolves.toBeDefined();
+    await expect(catalog.listChannels({ q: long })).resolves.toBeDefined();
+    await expect(new SearchRepository(db).suggest(long)).resolves.toBeDefined();
+    await expect(new AdminRepository(db).listVideos({ q: long })).resolves.toBeDefined();
   });
 });

@@ -11,8 +11,7 @@ import { SEARCH } from '@shared/constants.js';
 import { categoryPath, channelPath, searchPath, videoPath } from '@shared/core/paths.js';
 import { indexText } from '@shared/core/text.js';
 import type { SearchSuggestion } from '@shared/types/catalog.js';
-import { BaseRepository } from './base.js';
-import { escapeLike } from './catalog-repository.js';
+import { BaseRepository, likePattern } from './base.js';
 import { buildMatchExpression } from './search-expression.js';
 
 interface SuggestionRow {
@@ -47,7 +46,7 @@ export class SearchRepository extends BaseRepository {
     const trimmed = query.trim();
     if (trimmed.length < SEARCH.minQueryLength) return [];
 
-    const pattern = `%${escapeLike(trimmed)}%`;
+    const pattern = likePattern(trimmed);
     const expression = buildMatchExpression(trimmed);
     const suggestions: SearchSuggestion[] = [];
 
@@ -177,6 +176,14 @@ export class SearchRepository extends BaseRepository {
     // As a counter, a repeat of a query that has already been seen today is an
     // UPDATE of a row that exists rather than another INSERT, and the table is
     // bounded by distinct searches per day instead of by total traffic.
+    //
+    // One statement is not one row write, though, and that is the part worth
+    // remembering when adding an index to this table: an upsert rewrites every
+    // index entry whose columns changed. `hits` and `zero_hits` change on every
+    // search, so an index leading with either of them doubled the write cost of
+    // the whole endpoint — which is what `migrations/0012` removed. The indexes
+    // here are keyed on `day` alone for that reason, and an index over a
+    // counter column would put the cost straight back.
     await this.run(
       `INSERT INTO search_query_daily
          (day, query, raw_query, hits, result_count, zero_hits, category_id, updated_at)

@@ -14,7 +14,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { MAX_BOUND_PARAMETERS } from '@worker/repositories/base.js';
+import { MAX_BOUND_PARAMETERS, MAX_LIKE_PATTERN_BYTES } from '@worker/repositories/base.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -61,6 +61,31 @@ class TestPreparedStatement {
           `${String(MAX_BOUND_PARAMETERS)} — chunk the list with chunkForBindings(). ` +
           `Statement: ${this.#sql.split('\n')[0] ?? ''}`,
       );
+    }
+
+    // The same trick for D1's other invisible ceiling: a `LIKE` or `GLOB`
+    // pattern may be at most 50 **bytes**, and `node:sqlite` allows 50,000. Two
+    // bytes per Hebrew letter makes that twenty-four letters, so it is reachable
+    // by a sentence pasted into a search box, not only by an attack — and D1
+    // rejects the query rather than truncating it, which this layer turns into
+    // "the database is unavailable".
+    //
+    // Recognising the pattern by its wildcards rather than by parsing the SQL is
+    // approximate on purpose: it is looking for the one shape every call site
+    // here uses, and `likePattern()` is what call sites are supposed to build it
+    // with.
+    if (/\bLIKE\s+\?|\bGLOB\s+\?/i.test(this.#sql)) {
+      for (const value of values) {
+        if (typeof value !== 'string' || !(value.startsWith('%') || value.endsWith('%'))) continue;
+        const size = new TextEncoder().encode(value).length;
+        if (size > MAX_LIKE_PATTERN_BYTES) {
+          throw new Error(
+            `LIKE or GLOB pattern too complex: ${String(size)} bytes exceeds D1's limit of ` +
+              `${String(MAX_LIKE_PATTERN_BYTES)} — build the pattern with likePattern(). ` +
+              `Statement: ${this.#sql.split('\n')[0] ?? ''}`,
+          );
+        }
+      }
     }
 
     const next = new TestPreparedStatement(this.#db, this.#sql, this.#log);
