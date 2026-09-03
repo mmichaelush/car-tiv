@@ -21,7 +21,11 @@
  * changes; a new version drops every old cache on activation.
  */
 
-const CACHE_VERSION = 'v1';
+// Bumped from v1: the shell cache used to be keyed per URL, so an existing
+// visitor carries thousands of redundant entries that the new key will never
+// hit. `activate` deletes every cache not ending in this version, which is
+// what clears them.
+const CACHE_VERSION = 'v2';
 const SHELL_CACHE = `cartiv-shell-${CACHE_VERSION}`;
 const ASSET_CACHE = `cartiv-assets-${CACHE_VERSION}`;
 
@@ -98,6 +102,35 @@ self.addEventListener('fetch', (event) => {
 });
 
 /**
+ * The templated routes, and the one entry each of them stores.
+ *
+ * `/video/dQw4w9WgXcQ` and `/video/aBcDeFgHiJk` are the *same bytes*: the
+ * Worker rewrites both to one shell that reads the id out of
+ * `location.pathname` and fetches its own data. Cached per URL, browsing the
+ * catalog stored a separate copy of that identical shell for every video seen
+ * — 7,876 of them available — and a search-heavy session added one per distinct
+ * query string on top. None of it is large individually, which is exactly how
+ * it goes unnoticed until the origin's storage quota is reached and the browser
+ * evicts the whole cache, precache included, leaving the site *worse* offline
+ * than if none of this existed.
+ *
+ * Normalising the key to the route collapses each of those to one entry, which
+ * is both bounded and correct: the entry is what the network would return.
+ */
+const TEMPLATED_ROUTES = ['/video/', '/channel/', '/category/'];
+
+/**
+ * The cache key for a navigation: the route, not the address.
+ *
+ * Query strings go too — `/search?q=בלמים` and `/search?q=מזגן` are one shell,
+ * and the page reads its own query from `location.search`.
+ */
+function shellKey(url) {
+  const route = TEMPLATED_ROUTES.find((prefix) => url.pathname.startsWith(prefix));
+  return new Request(new URL(route ?? url.pathname, self.location.origin).href);
+}
+
+/**
  * Pages: network first, cache as a fallback.
  *
  * A page shell changes on every deploy and is tiny, so trying the network
@@ -107,15 +140,17 @@ self.addEventListener('fetch', (event) => {
  * with no network at all.
  */
 async function handleNavigation(request) {
+  const key = shellKey(new URL(request.url));
+
   try {
     const response = await fetch(request);
     if (response.ok) {
       const cache = await caches.open(SHELL_CACHE);
-      await cache.put(request, response.clone());
+      await cache.put(key, response.clone());
     }
     return response;
   } catch {
-    const cached = (await caches.match(request)) ?? (await caches.match('/offline.html'));
+    const cached = (await caches.match(key)) ?? (await caches.match('/offline.html'));
     return (
       cached ??
       new Response('<!doctype html><title>אין חיבור</title><p>אין חיבור לאינטרנט.</p>', {
