@@ -31,7 +31,8 @@
     "deploy:staging": "npm run build && wrangler deploy --env staging",
     "deploy:production": "npm run build && wrangler deploy --env production",
     "legal:build": "tsx scripts/build-legal-pages.ts",
-    "build:client": "vite build"
+    "build:client": "vite build",
+    "check:contrast": "tsx scripts/check-contrast.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260828.1",

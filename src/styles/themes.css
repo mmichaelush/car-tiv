@@ -424,10 +424,14 @@
   --text-muted: light-dark(hsl(197 3% 40%), hsl(197 4% 72%));
   --text-subtle: light-dark(hsl(197 3% 52%), hsl(197 4% 56%));
 
-  --brand: light-dark(#0d7fa5, #1ab7ea);
+  /* Light mode is a darkened Vimeo cyan so white ink clears AA on it: the
+     published brand colour is a mid-tone that neither white nor black text
+     reaches 4.5:1 against. Dark mode keeps the real one, where the ink is
+     near-black and the pairing is comfortable. */
+  --brand: light-dark(#0c7699, #1ab7ea);
   --brand-strong: light-dark(#0a6684, #3fc3ed);
   --brand-soft: light-dark(rgb(13 127 165 / 11%), rgb(26 183 234 / 15%));
-  --on-brand: light-dark(#0a0a0a, #0a0a0a);
+  --on-brand: light-dark(#ffffff, #0a0a0a);
   --focus-ring: light-dark(#0d7fa5, #49c6ee);
 
   --shadow-color: light-dark(rgb(2 18 23 / 10%), rgb(0 0 0 / 42%));
@@ -511,10 +515,12 @@
   --text-muted: light-dark(hsl(140 1% 40%), hsl(140 1% 72%));
   --text-subtle: light-dark(hsl(140 1% 52%), hsl(140 1% 56%));
 
-  --brand: light-dark(#118a3e, #1ed760);
+  /* Same trade as Vimeo above, for the same reason: Spotify green in light
+     mode is darkened until white ink clears AA. Dark mode keeps #1ed760. */
+  --brand: light-dark(#0f7c37, #1ed760);
   --brand-strong: light-dark(#0d6a30, #3ae477);
   --brand-soft: light-dark(rgb(17 138 62 / 11%), rgb(30 215 96 / 15%));
-  --on-brand: light-dark(#0a0a0a, #0a0a0a);
+  --on-brand: light-dark(#ffffff, #0a0a0a);
   --focus-ring: light-dark(#118a3e, #43e57d);
 
   --shadow-color: light-dark(rgb(0 2 1 / 10%), rgb(0 0 0 / 42%));
