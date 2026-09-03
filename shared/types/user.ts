@@ -23,9 +23,39 @@ export type Density = 'compact' | 'comfortable' | 'large';
 /** How the catalog grid lays out cards. */
 export type ViewMode = 'grid' | 'list' | 'compact';
 
-/** Named colour schemes. `system` follows the operating system. */
+/**
+ * The colour family. Brightness is a separate choice — see `ColorMode`.
+ *
+ * There used to be a `system` theme and a `light` theme, which made "which
+ * colours" and "how bright" the same question: choosing light mode replaced
+ * whatever family the visitor had picked, and choosing dark afterwards
+ * returned them to purple rather than to what they had. Every theme now has
+ * both palettes, so the two settings are independent.
+ */
 export type ThemeName =
-  'system' | 'purple' | 'midnight' | 'ocean' | 'black' | 'light' | 'sepia' | 'contrast';
+  | 'purple'
+  | 'midnight'
+  | 'ocean'
+  | 'forest'
+  | 'sunset'
+  | 'rose'
+  | 'nord'
+  | 'mono'
+  | 'sepia'
+  | 'classic'
+  | 'black'
+  | 'contrast'
+  | 'youtube'
+  | 'tiktok'
+  | 'instagram'
+  | 'vimeo'
+  | 'whatsapp'
+  | 'telegram'
+  | 'spotify'
+  | 'x';
+
+/** Light, dark, or whatever the device is set to. */
+export type ColorMode = 'light' | 'dark' | 'auto';
 
 /**
  * Text size, independent of density.
@@ -35,11 +65,18 @@ export type ThemeName =
  */
 export type TextSize = 'small' | 'medium' | 'large' | 'xlarge';
 
-/** Accent colour applied on top of the chosen theme. */
-export type AccentName = 'purple' | 'blue' | 'green' | 'orange' | 'gold';
+/**
+ * Accent colour applied on top of the chosen theme.
+ *
+ * `theme` is the default and overrides nothing, which is what lets a
+ * brand-styled theme keep the colour that makes it that brand.
+ */
+export type AccentName =
+  'theme' | 'purple' | 'blue' | 'green' | 'orange' | 'gold' | 'rose' | 'teal';
 
 export interface UserPreferences {
   readonly theme: ThemeName;
+  readonly colorMode: ColorMode;
   readonly accent: AccentName;
   readonly density: Density;
   readonly textSize: TextSize;
@@ -56,6 +93,20 @@ export interface UserPreferences {
    * setting — some people want a calm page on one device only.
    */
   readonly reduceMotion: boolean;
+  /**
+   * Raise contrast on top of whatever theme is chosen.
+   *
+   * Distinct from the `contrast` theme, which is one specific palette. This is
+   * the same intent applied to any of them, so someone who needs more contrast
+   * does not also have to give up the colours they chose.
+   */
+  readonly highContrast: boolean;
+  /** Underline every link in body text, not only on hover. */
+  readonly underlineLinks: boolean;
+  /** Drop blur and translucency, which some people find hard to read through. */
+  readonly reduceTransparency: boolean;
+  /** `true` shows the navigation rail as icons only on a wide screen. */
+  readonly navCollapsed: boolean;
 }
 
 /**

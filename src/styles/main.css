@@ -20,3 +20,5 @@
 @import './components/cards.css';
 @import './components/overlays.css';
 @import './components/pages.css';
+/* Last, so its overrides win over every component. */
+@import './accessibility.css';

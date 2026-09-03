@@ -32,6 +32,8 @@ import {
   summarizeIssues,
 } from './lib/legacy-catalog.js';
 import { chunkStatements, insertMany, literal, type SqlValue } from './lib/sql.js';
+// The counter SQL has exactly one definition; see the note at its use below.
+import { COUNTER_REFRESH } from '../worker/repositories/counters-repository.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -91,6 +93,27 @@ async function main(): Promise<void> {
       fileIndex += 1;
     }
   }
+
+  // The last file of every import is the counter refresh.
+  //
+  // Every maintained counter starts at zero, and the public catalog reads those
+  // columns instead of counting rows — so a database that was imported and not
+  // refreshed serves an empty tag cloud, an empty tag filter and a zero beside
+  // every category and channel. That looks like the filtering being broken, not
+  // like a missing step, and it was a documented step, which is a step someone
+  // can skip. Carrying it here means it cannot be skipped.
+  //
+  // The SQL is imported from `CountersRepository`, never restated, so the
+  // import and the hourly cron can never compute a counter differently.
+  const counterFile = `${String(fileIndex).padStart(4, '0')}_counters.sql`;
+  await writeFile(
+    path.join(OUT_DIR, counterFile),
+    `-- Maintained counters — see worker/repositories/counters-repository.ts\n` +
+      `-- Idempotent and guarded: running it twice writes nothing the second time.\n\n` +
+      `${Object.values(COUNTER_REFRESH).join(';\n\n')};\n`,
+    'utf8',
+  );
+  written.push(counterFile);
 
   const report = buildReport(result, featured.size, written);
   await writeFile(path.join(OUT_DIR, 'report.json'), JSON.stringify(report, null, 2), 'utf8');

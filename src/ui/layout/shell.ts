@@ -9,16 +9,18 @@
 
 import { categoryPath, ROUTES } from '@shared/core/paths.js';
 import { html, on, select, setHtml, toggleClass } from '../dom.js';
-import { icon } from '../icons.js';
+import { icon, type IconName } from '../icons.js';
 import { mountSearchBox } from '../components/search-box.js';
 import { catalog } from '../../data/catalog-repository.js';
 import { openThemeDialog } from '../../features/preferences/theme-dialog.js';
+import { readPreferences, updatePreferences } from '../../features/preferences/preferences.js';
 import { openLibraryDialog } from '../../features/library/library-dialog.js';
 import { mountCommandPalette, openCommandPalette } from '../../features/command-palette/palette.js';
 import { mountShortcutsHelp } from '../../features/command-palette/shortcuts.js';
 
 /** Which navigation entry is the current page. */
-export type ActiveNav = 'home' | 'channels' | 'library' | 'about' | 'contact' | 'add-video' | null;
+export type ActiveNav =
+  'home' | 'search' | 'channels' | 'library' | 'about' | 'contact' | 'add-video' | null;
 
 export interface ShellOptions {
   readonly active?: ActiveNav;
@@ -49,12 +51,44 @@ const FOOTER_CATEGORIES: readonly { id: string; name: string }[] = [
   { id: 'collectors', name: 'רכבי אספנות' },
 ];
 
-const NAV_ITEMS: readonly { key: ActiveNav; href: string; label: string }[] = [
-  { key: 'home', href: ROUTES.home, label: 'דף הבית' },
-  { key: 'channels', href: ROUTES.channels, label: 'ערוצים' },
-  { key: 'add-video', href: ROUTES.addVideo, label: 'הצעת סרטון' },
-  { key: 'about', href: ROUTES.about, label: 'אודות' },
-  { key: 'contact', href: ROUTES.contact, label: 'צור קשר' },
+/**
+ * The navigation, in groups.
+ *
+ * Grouped because the rail shows all of it at once and an undivided list of
+ * eight links is harder to scan than three short ones. The group headings are
+ * hidden while the rail is collapsed — there is no room for them, and the
+ * separators still do the dividing.
+ */
+interface NavItem {
+  readonly key: ActiveNav;
+  readonly href: string;
+  readonly label: string;
+  readonly iconName: IconName;
+}
+
+const NAV_GROUPS: readonly { title: string; items: readonly NavItem[] }[] = [
+  {
+    title: 'עיון',
+    items: [
+      { key: 'home', href: ROUTES.home, label: 'דף הבית', iconName: 'home' },
+      { key: 'search', href: ROUTES.search, label: 'חיפוש וסינון', iconName: 'search' },
+      { key: 'channels', href: ROUTES.channels, label: 'ערוצים', iconName: 'channel' },
+    ],
+  },
+  {
+    title: 'שלי',
+    items: [
+      { key: 'library', href: ROUTES.library, label: 'הספרייה שלי', iconName: 'library' },
+      { key: 'add-video', href: ROUTES.addVideo, label: 'הצעת סרטון', iconName: 'plus' },
+    ],
+  },
+  {
+    title: 'מידע',
+    items: [
+      { key: 'about', href: ROUTES.about, label: 'אודות', iconName: 'info' },
+      { key: 'contact', href: ROUTES.contact, label: 'צור קשר', iconName: 'mail' },
+    ],
+  },
 ];
 
 /**
@@ -62,12 +96,148 @@ const NAV_ITEMS: readonly { key: ActiveNav; href: string; label: string }[] = [
  * placeholders every page ships with, and wire its behaviour.
  */
 export function mountShell(options: ShellOptions = {}): void {
+  renderRail(options);
   renderHeader(options);
   renderFooter();
   mountBackToTop();
   mountShortcuts();
   mountCommandPalette();
   mountShortcutsHelp();
+}
+
+/**
+ * The navigation rail.
+ *
+ * One element that behaves as two things, which is what the platforms this is
+ * modelled on actually do:
+ *
+ *   * **Wide screens** — a fixed rail beside the content, expanded (icon and
+ *     label) or collapsed (icon only). The page is inset by its width, so the
+ *     content never sits underneath it. The collapsed/expanded choice is a
+ *     preference, so it survives a reload.
+ *   * **Narrow screens** — the same markup, off-canvas, opened by the header's
+ *     menu button over a scrim.
+ *
+ * Built here rather than added to all thirteen HTML files: the header and
+ * footer already work this way, so navigation stays a single edit.
+ *
+ * Inserted before `<main>` so the tab order is header → navigation → content,
+ * which is the order it reads in. The skip link still jumps straight past it.
+ */
+function renderRail(options: ShellOptions): void {
+  const main = document.getElementById('main');
+  if (main == null) return;
+
+  const rail = document.createElement('aside');
+  rail.id = 'site-rail';
+  rail.className = 'site-rail';
+  rail.dataset.siteRail = '';
+
+  setHtml(
+    rail,
+    html`
+      <nav class="site-rail__nav" aria-label="ניווט ראשי">
+        ${NAV_GROUPS.map(
+          (group) => html`
+            <p class="site-rail__group">${group.title}</p>
+            <ul>
+              ${group.items.map(
+                (item) => html`
+                  <li>
+                    <a
+                      href="${item.href}"
+                      ${options.active === item.key ? 'aria-current="page"' : ''}
+                    >
+                      <span class="site-rail__icon">${icon(item.iconName, { size: 20 })}</span>
+                      <span class="site-rail__label">${item.label}</span>
+                    </a>
+                  </li>
+                `,
+              )}
+            </ul>
+          `,
+        )}
+      </nav>
+
+      <button
+        type="button"
+        class="site-rail__collapse"
+        data-rail-collapse
+        aria-label="כיווץ התפריט"
+        title="כיווץ התפריט"
+      >
+        <span class="site-rail__icon">${icon('chevronEnd', { size: 18 })}</span>
+        <span class="site-rail__label">כיווץ</span>
+      </button>
+    `,
+  );
+
+  const scrim = document.createElement('div');
+  scrim.className = 'site-rail__scrim';
+  scrim.dataset.railScrim = '';
+  scrim.hidden = true;
+
+  main.before(rail);
+  main.before(scrim);
+
+  applyRailState(readPreferences().navCollapsed);
+  bindRail(scrim);
+}
+
+/** Write the collapsed state where the stylesheet can see it. */
+function applyRailState(collapsed: boolean): void {
+  document.documentElement.dataset.rail = collapsed ? 'collapsed' : 'expanded';
+
+  const button = document.querySelector('[data-rail-collapse]');
+  if (button == null) return;
+  const label = collapsed ? 'הרחבת התפריט' : 'כיווץ התפריט';
+  button.setAttribute('aria-label', label);
+  button.setAttribute('title', label);
+}
+
+/** Open and close the drawer, and collapse and expand the rail. */
+function bindRail(scrim: HTMLElement): void {
+  const closeDrawer = (): void => {
+    document.documentElement.removeAttribute('data-rail-open');
+    scrim.hidden = true;
+    const toggle = document.querySelector('[data-menu-toggle]');
+    toggle?.setAttribute('aria-expanded', 'false');
+  };
+
+  on(document, 'click', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    if (target.closest('[data-menu-toggle]') != null) {
+      // The same button is the drawer on a phone and the collapse toggle is
+      // its own control on a desktop, so this only ever opens the drawer.
+      const open = document.documentElement.getAttribute('data-rail-open') == null;
+      if (open) {
+        document.documentElement.setAttribute('data-rail-open', '');
+        scrim.hidden = false;
+      } else {
+        closeDrawer();
+      }
+      target.closest('[data-menu-toggle]')?.setAttribute('aria-expanded', String(open));
+      return;
+    }
+
+    if (target.closest('[data-rail-collapse]') != null) {
+      const collapsed = !readPreferences().navCollapsed;
+      updatePreferences({ navCollapsed: collapsed });
+      applyRailState(collapsed);
+      return;
+    }
+
+    // A link inside the drawer navigates, and the drawer should not still be
+    // open behind the new page on a browser that restores scroll position.
+    if (target.closest('[data-site-rail] a') != null) closeDrawer();
+    if (target.closest('[data-rail-scrim]') != null) closeDrawer();
+  });
+
+  on(document, 'keydown', (event) => {
+    if (event.key === 'Escape') closeDrawer();
+  });
 }
 
 /**
@@ -141,16 +311,6 @@ function renderHeader(options: ShellOptions): void {
           <span>CAR<span class="brand__mark">־טיב</span></span>
         </a>
 
-        <nav class="main-nav" data-main-nav aria-label="ניווט ראשי">
-          ${NAV_ITEMS.map(
-            (item) => html`
-              <a href="${item.href}" ${options.active === item.key ? 'aria-current="page"' : ''}>
-                ${item.label}
-              </a>
-            `,
-          )}
-        </nav>
-
         ${
           withSearch
             ? html`
@@ -217,6 +377,7 @@ function renderHeader(options: ShellOptions): void {
             data-menu-toggle
             aria-label="תפריט"
             aria-expanded="false"
+            aria-controls="site-rail"
           >
             ${icon('menu', { size: 18 })}
           </button>
@@ -232,13 +393,6 @@ function renderHeader(options: ShellOptions): void {
       suggest: (query, signal) => catalog.suggest(query, signal),
     });
   }
-
-  const menuToggle = select('[data-menu-toggle]', header);
-  const nav = select('[data-main-nav]', header);
-  on(menuToggle, 'click', () => {
-    const open = nav.classList.toggle('is-open');
-    menuToggle.setAttribute('aria-expanded', String(open));
-  });
 
   on(select('[data-open-palette]', header), 'click', () => {
     openCommandPalette();
@@ -296,17 +450,9 @@ function renderFooter(): void {
               >
                 עוד על האתר
               </a>
-              <a
-                href="https://github.com/mmichaelush/kosher-car-videos"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                הפרוייקט ב־GitHub
-              </a>
               <a href="${ROUTES.channels}">ערוצים</a>
               <a href="${ROUTES.library}">הספרייה שלי</a>
               <a href="${ROUTES.contact}">צור קשר</a>
-              <a href="${ROUTES.addVideo}#duplicate-check">בדוק אם סרטון קיים</a>
               <a href="${ROUTES.addVideo}">הוספת סרטונים</a>
             </nav>
           </div>

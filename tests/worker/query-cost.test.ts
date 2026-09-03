@@ -429,3 +429,68 @@ describe('the rate limiter protects the write budget too', () => {
     expect(verdict.retryAfterSeconds).toBeLessThanOrEqual(RATE_LIMITS.report.windowSeconds);
   });
 });
+
+describe('the counter refresh on a cold database', () => {
+  /**
+   * The first import of a new deployment is the cold case, and it is the one
+   * run that has to work. It very nearly did not.
+   *
+   * Written as a join — `FROM video_tags vt JOIN videos v ON v.id = vt.video_id
+   * WHERE vt.tag_id = tags.id` — SQLite inverts it: it drives from `videos`
+   * through `idx_videos_live_added`, scanning all 7,876 live rows, and probes
+   * `video_tags` by `(video_id, tag_id)`. `idx_video_tags_tag` is never used,
+   * so the entire catalog is scanned once per tag, twice over because of the
+   * change guard. Measured on the real catalog: **about 215 seconds** for
+   * 10,732 tags, against **155ms** for the `EXISTS` form that produces
+   * identical counts.
+   *
+   * A timing assertion would be flaky, so this pins the plan instead — which is
+   * the actual thing that differs.
+   */
+  it('drives the tag counter from the tag index, not from every live video', async () => {
+    clearCounters(db);
+
+    const statements = await db.record(async () => {
+      await counters.refreshAll();
+    });
+
+    const tagUpdate = statements.find((statement) =>
+      statement.sql.includes('UPDATE tags SET video_count'),
+    );
+    expect(tagUpdate, 'the tag counter statement').toBeDefined();
+    if (tagUpdate == null) return;
+
+    const plan = db.explain(tagUpdate).join('\n');
+    expect(plan, plan).toContain('idx_video_tags_tag');
+    // The inverted plan is recognisable by this index appearing in a statement
+    // that should never need to look at the live-video list at all.
+    expect(plan, plan).not.toContain('idx_videos_live_added');
+  });
+
+  it('leaves every counter populated, which is what the filter panel reads', async () => {
+    // `listPopularTags` filters on `video_count > 0` and the category-scoped
+    // list reads `category_tag_counts`. A database that was imported and never
+    // refreshed serves an empty tag cloud and an empty tag filter — which
+    // reads as the advanced filtering being broken rather than as a missing
+    // step. `scripts/build-catalog.ts` now emits the refresh as the last file
+    // of every import so the step cannot be skipped.
+    clearCounters(db);
+    expect(
+      db.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM tags WHERE video_count > 0`)[0]?.n,
+    ).toBe(0);
+
+    await counters.refreshAll();
+
+    expect(
+      db.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM tags WHERE video_count > 0`)[0]?.n,
+    ).toBeGreaterThan(0);
+    expect(
+      db.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM categories WHERE video_count > 0`)[0]
+        ?.n,
+    ).toBeGreaterThan(0);
+    expect(
+      db.queryRaw<{ n: number }>(`SELECT COUNT(*) AS n FROM channels WHERE video_count > 0`)[0]?.n,
+    ).toBeGreaterThan(0);
+    expect(db.queryRaw(`SELECT 1 FROM catalog_counters`).length).toBeGreaterThan(0);
+  });
+});

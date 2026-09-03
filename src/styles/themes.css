@@ -1,348 +1,727 @@
 /* ==========================================================================
    Themes
    --------------------------------------------------------------------------
-   Each theme redefines the *semantic* tokens only. Components never mention a
-   theme, so adding one is this file plus an entry in `src/features/theme`.
+   Two independent axes, which is the whole point of this file:
 
-   `data-theme` is written on <html> by `src/app/theme-bootstrap.ts` before the
-   page paints, which is what prevents the flash of the wrong colours.
-   `system` resolves to purple (dark) or light via `prefers-color-scheme`.
+     data-theme  the colour family — purple, ocean, youtube, …
+     data-mode   light | dark | auto (auto follows the device)
+
+   Every theme carries BOTH palettes. They used to be one axis: each theme was
+   a single fixed palette, "light" was itself a theme, and the light/dark
+   command replaced whatever family you had chosen — so picking Ocean and then
+   asking for light mode lost Ocean, and asking for dark afterwards returned
+   you to purple rather than to Ocean. Choosing a colour and choosing a
+   brightness are different questions and now have different controls.
+
+   Both palettes live in one block via `light-dark()`, which resolves against
+   the used `color-scheme` — so `color-scheme` belongs to the mode blocks
+   below and must never be set inside a theme, or that theme would be pinned
+   to one half of every pair.
+
+   Surfaces are derived from a shared lightness ramp and each theme's own
+   neutral hue, so eighteen themes are consistent with one another rather than
+   eighteen independent guesses.
+
+   `data-theme` and `data-mode` are written on <html> by
+   `public/theme-bootstrap.js` before the page paints, which is what prevents
+   a flash of the wrong colours.
    ========================================================================== */
 
-/* ---------------------------------------------------------------- Purple
-   The default: the dark violet the site has always used. */
+/* ------------------------------------------------------------- Mode axis
+   The only place `color-scheme` is set. `auto` declares both, so `light-dark()`
+   follows the device and the browser paints form controls and scrollbars to
+   match. */
+:root,
+:root[data-mode='auto'] {
+  color-scheme: light dark;
+}
+
+:root[data-mode='light'] {
+  color-scheme: light;
+}
+
+:root[data-mode='dark'] {
+  color-scheme: dark;
+}
+
+/* --------------------------------------------------- Mode-independent bits
+   Shadows and the hero gradient are not colours, so `light-dark()` cannot hold
+   them. Each is composed once here from a colour that can. Themes then set
+   only the colour, and no theme repeats a shadow triple. */
+:root {
+  --shadow-sm: 0 2px 8px var(--shadow-color);
+  --shadow-md: 0 12px 32px var(--shadow-color-strong);
+  --shadow-lg: 0 28px 70px var(--shadow-color-strong);
+
+  --hero-bg: radial-gradient(
+    120% 90% at 50% 0%,
+    var(--hero-1) 0%,
+    var(--hero-2) 46%,
+    var(--bg) 80%
+  );
+}
+
+/* סגול — הברירת מחדל של האתר */
 :root,
 :root[data-theme='purple'] {
-  color-scheme: dark;
+  --bg: light-dark(hsl(270 7% 97%), hsl(270 10% 6%));
+  --bg-elevated: light-dark(hsl(270 0% 100%), hsl(270 10% 9%));
+  --surface: light-dark(hsl(270 0% 100%), hsl(270 10% 12%));
+  --surface-2: light-dark(hsl(270 6% 96%), hsl(270 10% 16%));
+  --surface-3: light-dark(hsl(270 6% 92%), hsl(270 10% 21%));
+  --line: light-dark(hsl(270 5% 88%), hsl(270 11% 27%));
+  --line-strong: light-dark(hsl(270 5% 78%), hsl(270 11% 36%));
 
-  --bg: var(--ink-950);
-  --bg-elevated: #130c1e;
-  --surface: #1a1128;
-  --surface-2: #241834;
-  --surface-3: #2f2143;
-  --line: #382a4d;
-  --line-strong: #4a3862;
+  --text: light-dark(hsl(270 6% 13%), hsl(270 5% 97%));
+  --text-muted: light-dark(hsl(270 5% 40%), hsl(270 6% 72%));
+  --text-subtle: light-dark(hsl(270 5% 52%), hsl(270 6% 56%));
 
-  --text: #f7f3fb;
-  --text-muted: #b6a8c6;
-  --text-subtle: #8b7c9c;
-  --text-inverse: #17101f;
+  --brand: light-dark(#7e22ce, #a855f7);
+  --brand-strong: light-dark(#6b1daf, #bc7cf9);
+  --brand-soft: light-dark(rgb(126 34 206 / 11%), rgb(168 85 247 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#7e22ce, #c186f9);
 
-  --brand: var(--purple-500);
-  --brand-strong: var(--purple-400);
-  --brand-soft: rgb(168 85 247 / 14%);
-  --on-brand: #ffffff;
-
-  --success: var(--green-400);
-  --warning: var(--amber-400);
-  --danger: var(--red-400);
-
-  --shadow-sm: 0 2px 8px rgb(5 2 10 / 40%);
-  --shadow-md: 0 12px 32px rgb(5 2 10 / 50%);
-  --shadow-lg: 0 28px 70px rgb(5 2 10 / 62%);
-
-  --hero-bg: radial-gradient(120% 90% at 50% 0%, #3a1c5c 0%, #1b0f2b 45%, var(--bg) 78%);
-  --hero-glow: rgb(168 85 247 / 22%);
-  --header-bg: rgb(14 9 22 / 82%);
-  --scrim: rgb(6 3 12 / 78%);
-
-  /*
-   * The focus ring, as its own token rather than "the brand colour".
-   *
-   * On most themes they are the same, but a theme whose accent is close to its
-   * surface needs a different ring — and the accent setting can change the
-   * brand colour out from under it at any moment. One token means the ring is
-   * never accidentally invisible.
-   */
-  --focus-ring: var(--brand-strong);
+  --shadow-color: light-dark(rgb(46 12 75 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(46 12 75 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(126 34 206 / 14%), #5608a1);
+  --hero-2: light-dark(hsl(270 6% 97%), hsl(270 10% 11%));
+  --hero-glow: light-dark(rgb(126 34 206 / 14%), rgb(168 85 247 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(270, 10%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
 }
 
-/* --------------------------------------------------------------- Midnight
-   Deep blue with a gold accent — the alternative dark scheme. */
+/* חצות — כחול עמוק עם זהב */
 :root[data-theme='midnight'] {
-  color-scheme: dark;
+  --bg: light-dark(hsl(222 8% 97%), hsl(222 10% 6%));
+  --bg-elevated: light-dark(hsl(222 0% 100%), hsl(222 10% 9%));
+  --surface: light-dark(hsl(222 0% 100%), hsl(222 10% 12%));
+  --surface-2: light-dark(hsl(222 6% 96%), hsl(222 10% 16%));
+  --surface-3: light-dark(hsl(222 6% 92%), hsl(222 10% 21%));
+  --line: light-dark(hsl(222 6% 88%), hsl(222 12% 27%));
+  --line-strong: light-dark(hsl(222 6% 78%), hsl(222 12% 36%));
 
-  --bg: #060a12;
-  --bg-elevated: #0a111c;
-  --surface: #0e1624;
-  --surface-2: #16202f;
-  --surface-3: #1e2b3e;
-  --line: #24334a;
-  --line-strong: #33455f;
+  --text: light-dark(hsl(222 6% 13%), hsl(222 5% 97%));
+  --text-muted: light-dark(hsl(222 5% 40%), hsl(222 6% 72%));
+  --text-subtle: light-dark(hsl(222 5% 52%), hsl(222 6% 56%));
 
-  --text: #f2f6fb;
-  --text-muted: #9db0c6;
-  --text-subtle: #74879e;
-  --text-inverse: #0b1220;
+  --brand: light-dark(#a16207, #f5bd38);
+  --brand-strong: light-dark(#7f4d06, #f7ca5f);
+  --brand-soft: light-dark(rgb(161 98 7 / 11%), rgb(245 189 56 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#a16207, #f7cd69);
 
-  --brand: #f5bd38;
-  --brand-strong: #ffd76b;
-  --brand-soft: rgb(245 189 56 / 14%);
-  --on-brand: #17110a;
-
-  --shadow-sm: 0 2px 8px rgb(0 0 0 / 45%);
-  --shadow-md: 0 12px 32px rgb(0 0 0 / 55%);
-  --shadow-lg: 0 28px 70px rgb(0 0 0 / 65%);
-
-  --hero-bg: radial-gradient(120% 90% at 50% 0%, #16304f 0%, #0a1524 46%, var(--bg) 78%);
-  --hero-glow: rgb(245 189 56 / 16%);
-  --header-bg: rgb(6 10 18 / 84%);
-  --scrim: rgb(2 5 11 / 80%);
+  --shadow-color: light-dark(rgb(14 9 1 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(14 9 1 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(161 98 7 / 14%), #835e07);
+  --hero-2: light-dark(hsl(222 6% 97%), hsl(222 10% 11%));
+  --hero-glow: light-dark(rgb(161 98 7 / 14%), rgb(245 189 56 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(222, 10%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
 }
 
-/* ----------------------------------------------------------------- Ocean */
+/* אוקיינוס — טורקיז */
 :root[data-theme='ocean'] {
-  color-scheme: dark;
+  --bg: light-dark(hsl(192 8% 97%), hsl(192 11% 6%));
+  --bg-elevated: light-dark(hsl(192 0% 100%), hsl(192 11% 9%));
+  --surface: light-dark(hsl(192 0% 100%), hsl(192 11% 12%));
+  --surface-2: light-dark(hsl(192 6% 96%), hsl(192 11% 16%));
+  --surface-3: light-dark(hsl(192 6% 92%), hsl(192 11% 21%));
+  --line: light-dark(hsl(192 6% 88%), hsl(192 13% 27%));
+  --line-strong: light-dark(hsl(192 6% 78%), hsl(192 13% 36%));
 
-  --bg: #031014;
-  --bg-elevated: #061a20;
-  --surface: #08222a;
-  --surface-2: #0e2f39;
-  --surface-3: #143d4a;
-  --line: #17454f;
-  --line-strong: #226070;
+  --text: light-dark(hsl(192 6% 13%), hsl(192 5% 97%));
+  --text-muted: light-dark(hsl(192 5% 40%), hsl(192 6% 72%));
+  --text-subtle: light-dark(hsl(192 5% 52%), hsl(192 6% 56%));
 
-  --text: #ecfbfb;
-  --text-muted: #9dc2c7;
-  --text-subtle: #74a0a7;
-  --text-inverse: #03181c;
+  --brand: light-dark(#0d8f86, #22d3c5);
+  --brand-strong: light-dark(#0a6e67, #3ee0d3);
+  --brand-soft: light-dark(rgb(13 143 134 / 11%), rgb(34 211 197 / 15%));
+  --on-brand: light-dark(#0a0a0a, #0a0a0a);
+  --focus-ring: light-dark(#0d8f86, #47e1d5);
 
-  --brand: #22d3c5;
-  --brand-strong: #67e8dc;
-  --brand-soft: rgb(34 211 197 / 14%);
-  --on-brand: #022a28;
-
-  --shadow-sm: 0 2px 8px rgb(0 12 16 / 45%);
-  --shadow-md: 0 12px 32px rgb(0 12 16 / 55%);
-  --shadow-lg: 0 28px 70px rgb(0 12 16 / 65%);
-
-  --hero-bg: radial-gradient(120% 90% at 50% 0%, #0c4a55 0%, #05242c 46%, var(--bg) 78%);
-  --hero-glow: rgb(34 211 197 / 18%);
-  --header-bg: rgb(3 16 20 / 84%);
-  --scrim: rgb(1 10 13 / 80%);
+  --shadow-color: light-dark(rgb(0 3 3 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(0 3 3 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(13 143 134 / 14%), #0b4642);
+  --hero-2: light-dark(hsl(192 6% 97%), hsl(192 11% 11%));
+  --hero-glow: light-dark(rgb(13 143 134 / 14%), rgb(34 211 197 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(192, 11%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
 }
 
-/* ----------------------------------------------------------------- Light */
-:root[data-theme='light'] {
-  /* On white, the strong tint is too pale for a ring. */
-  --focus-ring: var(--brand);
-  color-scheme: light;
+/* יער — ירוק */
+:root[data-theme='forest'] {
+  --bg: light-dark(hsl(150 6% 97%), hsl(150 8% 6%));
+  --bg-elevated: light-dark(hsl(150 0% 100%), hsl(150 8% 9%));
+  --surface: light-dark(hsl(150 0% 100%), hsl(150 8% 12%));
+  --surface-2: light-dark(hsl(150 5% 96%), hsl(150 8% 16%));
+  --surface-3: light-dark(hsl(150 5% 92%), hsl(150 8% 21%));
+  --line: light-dark(hsl(150 4% 88%), hsl(150 9% 27%));
+  --line-strong: light-dark(hsl(150 4% 78%), hsl(150 9% 36%));
 
-  --bg: var(--ink-50);
-  --bg-elevated: var(--ink-0);
-  --surface: var(--ink-0);
-  --surface-2: var(--ink-100);
-  --surface-3: var(--ink-200);
-  --line: #e2dbec;
-  --line-strong: #cdc1dc;
+  --text: light-dark(hsl(150 5% 13%), hsl(150 4% 97%));
+  --text-muted: light-dark(hsl(150 4% 40%), hsl(150 5% 72%));
+  --text-subtle: light-dark(hsl(150 4% 52%), hsl(150 5% 56%));
 
-  --text: var(--ink-900);
-  --text-muted: var(--ink-500);
-  --text-subtle: var(--ink-400);
-  --text-inverse: var(--ink-0);
+  --brand: light-dark(#15803d, #4ade80);
+  --brand-strong: light-dark(#10612e, #6de498);
+  --brand-soft: light-dark(rgb(21 128 61 / 11%), rgb(74 222 128 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#15803d, #75e69e);
 
-  --brand: var(--purple-700);
-  --brand-strong: var(--purple-600);
-  --brand-soft: rgb(126 34 206 / 10%);
-  --on-brand: #ffffff;
-
-  --success: var(--green-600);
-  --warning: var(--amber-600);
-  --danger: var(--red-600);
-
-  --shadow-sm: 0 1px 3px rgb(41 31 51 / 8%);
-  --shadow-md: 0 10px 28px rgb(41 31 51 / 12%);
-  --shadow-lg: 0 24px 60px rgb(41 31 51 / 16%);
-
-  --hero-bg: radial-gradient(120% 90% at 50% 0%, #efe4fb 0%, #f7f3fc 48%, var(--bg) 80%);
-  --hero-glow: rgb(126 34 206 / 12%);
-  --header-bg: rgb(255 255 255 / 86%);
-  --scrim: rgb(30 20 45 / 45%);
+  --shadow-color: light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(0 0 0 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(21 128 61 / 14%), #147036);
+  --hero-2: light-dark(hsl(150 5% 97%), hsl(150 8% 11%));
+  --hero-glow: light-dark(rgb(21 128 61 / 14%), rgb(74 222 128 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(150, 8%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
 }
 
-/* -------------------------------------------------------- High contrast
-   For readers who need maximum separation. Not a "prettier dark" — the
-   contrast ratios here are the point. */
-:root[data-theme='contrast'] {
-  /* Maximum contrast means exactly that: the ring is the text colour. */
-  --focus-ring: var(--text);
-  color-scheme: dark;
+/* שקיעה — כתום חם */
+:root[data-theme='sunset'] {
+  --bg: light-dark(hsl(20 8% 97%), hsl(20 11% 6%));
+  --bg-elevated: light-dark(hsl(20 0% 100%), hsl(20 11% 9%));
+  --surface: light-dark(hsl(20 0% 100%), hsl(20 11% 12%));
+  --surface-2: light-dark(hsl(20 6% 96%), hsl(20 11% 16%));
+  --surface-3: light-dark(hsl(20 6% 92%), hsl(20 11% 21%));
+  --line: light-dark(hsl(20 6% 88%), hsl(20 13% 27%));
+  --line-strong: light-dark(hsl(20 6% 78%), hsl(20 13% 36%));
 
-  --bg: #000000;
-  --bg-elevated: #000000;
-  --surface: #0a0a0a;
-  --surface-2: #141414;
-  --surface-3: #1f1f1f;
-  --line: #666666;
-  --line-strong: #999999;
+  --text: light-dark(hsl(20 6% 13%), hsl(20 5% 97%));
+  --text-muted: light-dark(hsl(20 5% 40%), hsl(20 6% 72%));
+  --text-subtle: light-dark(hsl(20 5% 52%), hsl(20 6% 56%));
 
-  --text: #ffffff;
-  --text-muted: #e0e0e0;
-  --text-subtle: #bdbdbd;
-  --text-inverse: #000000;
+  --brand: light-dark(#c2410c, #fb923c);
+  --brand-strong: light-dark(#a0360a, #fca864);
+  --brand-soft: light-dark(rgb(194 65 12 / 11%), rgb(251 146 60 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#c2410c, #fcae6e);
 
-  --brand: #ffd400;
-  --brand-strong: #ffe968;
-  --brand-soft: rgb(255 212 0 / 18%);
-  --on-brand: #000000;
-
-  --success: #4ade80;
-  --warning: #ffd400;
-  --danger: #ff8a8a;
-
-  --shadow-sm: none;
-  --shadow-md: none;
-  --shadow-lg: none;
-
-  --hero-bg: #000000;
-  --hero-glow: transparent;
-  --header-bg: #000000;
-  --scrim: rgb(0 0 0 / 92%);
+  --shadow-color: light-dark(rgb(50 17 3 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(50 17 3 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(194 65 12 / 14%), #914303);
+  --hero-2: light-dark(hsl(20 6% 97%), hsl(20 11% 11%));
+  --hero-glow: light-dark(rgb(194 65 12 / 14%), rgb(251 146 60 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(20, 11%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
 }
 
-/* ------------------------------------------------------------------ Sepia
-   Warm, low-blue and quiet. The scheme to read a long page of text in late at
-   night — a real preference on a site people browse in bed, and one that no
-   amount of dimming a violet theme reproduces. */
+/* ורד — ורוד */
+:root[data-theme='rose'] {
+  --bg: light-dark(hsl(340 7% 97%), hsl(340 9% 6%));
+  --bg-elevated: light-dark(hsl(340 0% 100%), hsl(340 9% 9%));
+  --surface: light-dark(hsl(340 0% 100%), hsl(340 9% 12%));
+  --surface-2: light-dark(hsl(340 5% 96%), hsl(340 9% 16%));
+  --surface-3: light-dark(hsl(340 5% 92%), hsl(340 9% 21%));
+  --line: light-dark(hsl(340 5% 88%), hsl(340 10% 27%));
+  --line-strong: light-dark(hsl(340 5% 78%), hsl(340 10% 36%));
+
+  --text: light-dark(hsl(340 5% 13%), hsl(340 4% 97%));
+  --text-muted: light-dark(hsl(340 4% 40%), hsl(340 5% 72%));
+  --text-subtle: light-dark(hsl(340 4% 52%), hsl(340 5% 56%));
+
+  --brand: light-dark(#be123c, #fb7185);
+  --brand-strong: light-dark(#9d0f32, #fc99a7);
+  --brand-soft: light-dark(rgb(190 18 60 / 11%), rgb(251 113 133 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#be123c, #fca3b0);
+
+  --shadow-color: light-dark(rgb(50 5 16 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(50 5 16 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(190 18 60 / 14%), #c30621);
+  --hero-2: light-dark(hsl(340 5% 97%), hsl(340 9% 11%));
+  --hero-glow: light-dark(rgb(190 18 60 / 14%), rgb(251 113 133 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(340, 9%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* נורד — כחול־אפור רגוע */
+:root[data-theme='nord'] {
+  --bg: light-dark(hsl(215 4% 97%), hsl(215 6% 6%));
+  --bg-elevated: light-dark(hsl(215 0% 100%), hsl(215 6% 9%));
+  --surface: light-dark(hsl(215 0% 100%), hsl(215 6% 12%));
+  --surface-2: light-dark(hsl(215 3% 96%), hsl(215 6% 16%));
+  --surface-3: light-dark(hsl(215 3% 92%), hsl(215 6% 21%));
+  --line: light-dark(hsl(215 2% 88%), hsl(215 5% 27%));
+  --line-strong: light-dark(hsl(215 2% 78%), hsl(215 5% 36%));
+
+  --text: light-dark(hsl(215 3% 13%), hsl(215 3% 97%));
+  --text-muted: light-dark(hsl(215 3% 40%), hsl(215 3% 72%));
+  --text-subtle: light-dark(hsl(215 3% 52%), hsl(215 3% 56%));
+
+  --brand: light-dark(#3b6e8c, #88c0d0);
+  --brand-strong: light-dark(#305a73, #a5cfdc);
+  --brand-soft: light-dark(rgb(59 110 140 / 11%), rgb(136 192 208 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#3b6e8c, #add3de);
+
+  --shadow-color: light-dark(rgb(14 25 32 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(14 25 32 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(59 110 140 / 14%), #337082);
+  --hero-2: light-dark(hsl(215 3% 97%), hsl(215 6% 11%));
+  --hero-glow: light-dark(rgb(59 110 140 / 14%), rgb(136 192 208 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(215, 6%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* מונוכרום — אפור בלבד */
+:root[data-theme='mono'] {
+  --bg: light-dark(hsl(0 0% 97%), hsl(0 0% 6%));
+  --bg-elevated: light-dark(hsl(0 0% 100%), hsl(0 0% 9%));
+  --surface: light-dark(hsl(0 0% 100%), hsl(0 0% 12%));
+  --surface-2: light-dark(hsl(0 0% 96%), hsl(0 0% 16%));
+  --surface-3: light-dark(hsl(0 0% 92%), hsl(0 0% 21%));
+  --line: light-dark(hsl(0 0% 88%), hsl(0 0% 27%));
+  --line-strong: light-dark(hsl(0 0% 78%), hsl(0 0% 36%));
+
+  --text: light-dark(hsl(0 0% 13%), hsl(0 0% 97%));
+  --text-muted: light-dark(hsl(0 0% 40%), hsl(0 0% 72%));
+  --text-subtle: light-dark(hsl(0 0% 52%), hsl(0 0% 56%));
+
+  --brand: light-dark(#404040, #d4d4d4);
+  --brand-strong: light-dark(#2e2e2e, #e8e8e8);
+  --brand-soft: light-dark(rgb(64 64 64 / 11%), rgb(212 212 212 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#404040, #eeeeee);
+
+  --shadow-color: light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(0 0 0 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(64 64 64 / 14%), #828282);
+  --hero-2: light-dark(hsl(0 0% 97%), hsl(0 0% 11%));
+  --hero-glow: light-dark(rgb(64 64 64 / 14%), rgb(212 212 212 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(0, 0%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* נייר — גוון נייר חם */
 :root[data-theme='sepia'] {
-  --focus-ring: var(--brand-strong);
-  color-scheme: light;
+  --bg: light-dark(hsl(32 7% 97%), hsl(32 10% 6%));
+  --bg-elevated: light-dark(hsl(32 0% 100%), hsl(32 10% 9%));
+  --surface: light-dark(hsl(32 0% 100%), hsl(32 10% 12%));
+  --surface-2: light-dark(hsl(32 6% 96%), hsl(32 10% 16%));
+  --surface-3: light-dark(hsl(32 6% 92%), hsl(32 10% 21%));
+  --line: light-dark(hsl(32 5% 88%), hsl(32 11% 27%));
+  --line-strong: light-dark(hsl(32 5% 78%), hsl(32 11% 36%));
 
-  --bg: #f6efe3;
-  --bg-elevated: #fbf6ec;
-  --surface: #fdf9f1;
-  --surface-2: #f2e9d8;
-  --surface-3: #e8dcc6;
-  --line: #ddcfb6;
-  --line-strong: #c9b795;
+  --text: light-dark(hsl(32 6% 13%), hsl(32 5% 97%));
+  --text-muted: light-dark(hsl(32 5% 40%), hsl(32 6% 72%));
+  --text-subtle: light-dark(hsl(32 5% 52%), hsl(32 6% 56%));
 
-  --text: #33291c;
-  --text-muted: #6b5c46;
-  --text-subtle: #8b7a61;
-  --text-inverse: #fdf9f1;
+  --brand: light-dark(#8a5a2b, #d4a373);
+  --brand-strong: light-dark(#6f4823, #deb892);
+  --brand-soft: light-dark(rgb(138 90 43 / 11%), rgb(212 163 115 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#8a5a2b, #e0bd9a);
 
-  --brand: #a0522d;
-  --brand-strong: #8b4513;
-  --brand-soft: rgb(160 82 45 / 12%);
-  --on-brand: #fff8f0;
-
-  --success: #4f7942;
-  --warning: #b8860b;
-  --danger: #a4342a;
-
-  --shadow-sm: 0 2px 8px rgb(90 68 40 / 12%);
-  --shadow-md: 0 12px 32px rgb(90 68 40 / 16%);
-  --shadow-lg: 0 28px 70px rgb(90 68 40 / 22%);
-
-  --hero-bg: radial-gradient(120% 90% at 50% 0%, #efe0c8 0%, #f6efe3 55%, var(--bg) 80%);
-  --hero-glow: rgb(160 82 45 / 16%);
-  --header-bg: rgb(246 239 227 / 88%);
-  --scrim: rgb(51 41 28 / 55%);
+  --shadow-color: light-dark(rgb(21 14 7 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(21 14 7 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(138 90 43 / 14%), #7d5126);
+  --hero-2: light-dark(hsl(32 6% 97%), hsl(32 10% 11%));
+  --hero-glow: light-dark(rgb(138 90 43 / 14%), rgb(212 163 115 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(32, 10%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
 }
 
-/* --------------------------------------------------------------- Midnight-black
-   True black. On an OLED phone an unlit pixel draws no power at all, which is
-   a measurable difference on a site people scroll for a while — and some
-   people simply prefer it. Distinct from "contrast", which is about legibility
-   rather than about black. */
+/* יוטיוב — אדום על אפור */
+:root[data-theme='youtube'] {
+  --bg: light-dark(hsl(0 1% 97%), hsl(0 2% 6%));
+  --bg-elevated: light-dark(hsl(0 0% 100%), hsl(0 2% 9%));
+  --surface: light-dark(hsl(0 0% 100%), hsl(0 2% 12%));
+  --surface-2: light-dark(hsl(0 1% 96%), hsl(0 2% 16%));
+  --surface-3: light-dark(hsl(0 1% 92%), hsl(0 2% 21%));
+  --line: light-dark(hsl(0 0% 88%), hsl(0 0% 27%));
+  --line-strong: light-dark(hsl(0 0% 78%), hsl(0 0% 36%));
+
+  --text: light-dark(hsl(0 1% 13%), hsl(0 1% 97%));
+  --text-muted: light-dark(hsl(0 1% 40%), hsl(0 1% 72%));
+  --text-subtle: light-dark(hsl(0 1% 52%), hsl(0 1% 56%));
+
+  --brand: light-dark(#cc0000, #ff3b30);
+  --brand-strong: light-dark(#a80000, #ff6259);
+  --brand-soft: light-dark(rgb(204 0 0 / 11%), rgb(255 59 48 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#cc0000, #ff6b63);
+
+  --shadow-color: light-dark(rgb(51 0 0 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(51 0 0 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(204 0 0 / 14%), #8c0700);
+  --hero-2: light-dark(hsl(0 1% 97%), hsl(0 2% 11%));
+  --hero-glow: light-dark(rgb(204 0 0 / 14%), rgb(255 59 48 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(0, 2%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* טיקטוק — ציאן ומג׳נטה */
+:root[data-theme='tiktok'] {
+  --bg: light-dark(hsl(190 2% 97%), hsl(190 2% 6%));
+  --bg-elevated: light-dark(hsl(190 0% 100%), hsl(190 2% 9%));
+  --surface: light-dark(hsl(190 0% 100%), hsl(190 2% 12%));
+  --surface-2: light-dark(hsl(190 1% 96%), hsl(190 2% 16%));
+  --surface-3: light-dark(hsl(190 1% 92%), hsl(190 2% 21%));
+  --line: light-dark(hsl(190 0% 88%), hsl(190 0% 27%));
+  --line-strong: light-dark(hsl(190 0% 78%), hsl(190 0% 36%));
+
+  --text: light-dark(hsl(190 1% 13%), hsl(190 1% 97%));
+  --text-muted: light-dark(hsl(190 1% 40%), hsl(190 1% 72%));
+  --text-subtle: light-dark(hsl(190 1% 52%), hsl(190 1% 56%));
+
+  --brand: light-dark(#c8003c, #25f4ee);
+  --brand-strong: light-dark(#a40031, #4cf6f1);
+  --brand-soft: light-dark(rgb(200 0 60 / 11%), rgb(37 244 238 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#c8003c, #56f6f2);
+
+  --shadow-color: light-dark(rgb(47 0 14 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(47 0 14 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(200 0 60 / 14%), #06706d);
+  --hero-2: light-dark(hsl(190 1% 97%), hsl(190 2% 11%));
+  --hero-glow: light-dark(rgb(200 0 60 / 14%), rgb(37 244 238 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(190, 2%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* אינסטגרם — ורוד־סגול */
+:root[data-theme='instagram'] {
+  --bg: light-dark(hsl(330 3% 97%), hsl(330 4% 6%));
+  --bg-elevated: light-dark(hsl(330 0% 100%), hsl(330 4% 9%));
+  --surface: light-dark(hsl(330 0% 100%), hsl(330 4% 12%));
+  --surface-2: light-dark(hsl(330 2% 96%), hsl(330 4% 16%));
+  --surface-3: light-dark(hsl(330 2% 92%), hsl(330 4% 21%));
+  --line: light-dark(hsl(330 1% 88%), hsl(330 3% 27%));
+  --line-strong: light-dark(hsl(330 1% 78%), hsl(330 3% 36%));
+
+  --text: light-dark(hsl(330 2% 13%), hsl(330 2% 97%));
+  --text-muted: light-dark(hsl(330 2% 40%), hsl(330 2% 72%));
+  --text-subtle: light-dark(hsl(330 2% 52%), hsl(330 2% 56%));
+
+  --brand: light-dark(#c13584, #e1306c);
+  --brand-strong: light-dark(#a52d71, #e65485);
+  --brand-soft: light-dark(rgb(193 53 132 / 11%), rgb(225 48 108 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#c13584, #e75d8c);
+
+  --shadow-color: light-dark(rgb(73 20 50 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(73 20 50 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(193 53 132 / 14%), #600e2a);
+  --hero-2: light-dark(hsl(330 2% 97%), hsl(330 4% 11%));
+  --hero-glow: light-dark(rgb(193 53 132 / 14%), rgb(225 48 108 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(330, 4%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* וימיאו — תכלת */
+:root[data-theme='vimeo'] {
+  --bg: light-dark(hsl(197 5% 97%), hsl(197 6% 6%));
+  --bg-elevated: light-dark(hsl(197 0% 100%), hsl(197 6% 9%));
+  --surface: light-dark(hsl(197 0% 100%), hsl(197 6% 12%));
+  --surface-2: light-dark(hsl(197 4% 96%), hsl(197 6% 16%));
+  --surface-3: light-dark(hsl(197 4% 92%), hsl(197 6% 21%));
+  --line: light-dark(hsl(197 3% 88%), hsl(197 6% 27%));
+  --line-strong: light-dark(hsl(197 3% 78%), hsl(197 6% 36%));
+
+  --text: light-dark(hsl(197 4% 13%), hsl(197 3% 97%));
+  --text-muted: light-dark(hsl(197 3% 40%), hsl(197 4% 72%));
+  --text-subtle: light-dark(hsl(197 3% 52%), hsl(197 4% 56%));
+
+  --brand: light-dark(#0d7fa5, #1ab7ea);
+  --brand-strong: light-dark(#0a6684, #3fc3ed);
+  --brand-soft: light-dark(rgb(13 127 165 / 11%), rgb(26 183 234 / 15%));
+  --on-brand: light-dark(#0a0a0a, #0a0a0a);
+  --focus-ring: light-dark(#0d7fa5, #49c6ee);
+
+  --shadow-color: light-dark(rgb(2 18 23 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(2 18 23 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(13 127 165 / 14%), #084559);
+  --hero-2: light-dark(hsl(197 4% 97%), hsl(197 6% 11%));
+  --hero-glow: light-dark(rgb(13 127 165 / 14%), rgb(26 183 234 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(197, 6%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* וואטסאפ — ירוק */
+:root[data-theme='whatsapp'] {
+  --bg: light-dark(hsl(165 4% 97%), hsl(165 5% 6%));
+  --bg-elevated: light-dark(hsl(165 0% 100%), hsl(165 5% 9%));
+  --surface: light-dark(hsl(165 0% 100%), hsl(165 5% 12%));
+  --surface-2: light-dark(hsl(165 3% 96%), hsl(165 5% 16%));
+  --surface-3: light-dark(hsl(165 3% 92%), hsl(165 5% 21%));
+  --line: light-dark(hsl(165 2% 88%), hsl(165 4% 27%));
+  --line-strong: light-dark(hsl(165 2% 78%), hsl(165 4% 36%));
+
+  --text: light-dark(hsl(165 3% 13%), hsl(165 2% 97%));
+  --text-muted: light-dark(hsl(165 2% 40%), hsl(165 3% 72%));
+  --text-subtle: light-dark(hsl(165 2% 52%), hsl(165 3% 56%));
+
+  --brand: light-dark(#128c7e, #25d366);
+  --brand-strong: light-dark(#0e6c62, #43de7d);
+  --brand-soft: light-dark(rgb(18 140 126 / 11%), rgb(37 211 102 / 15%));
+  --on-brand: light-dark(#0a0a0a, #0a0a0a);
+  --focus-ring: light-dark(#128c7e, #4be083);
+
+  --shadow-color: light-dark(rgb(1 4 4 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(1 4 4 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(18 140 126 / 14%), #0d4823);
+  --hero-2: light-dark(hsl(165 3% 97%), hsl(165 5% 11%));
+  --hero-glow: light-dark(rgb(18 140 126 / 14%), rgb(37 211 102 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(165, 5%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* טלגרם — כחול בהיר */
+:root[data-theme='telegram'] {
+  --bg: light-dark(hsl(205 5% 97%), hsl(205 6% 6%));
+  --bg-elevated: light-dark(hsl(205 0% 100%), hsl(205 6% 9%));
+  --surface: light-dark(hsl(205 0% 100%), hsl(205 6% 12%));
+  --surface-2: light-dark(hsl(205 4% 96%), hsl(205 6% 16%));
+  --surface-3: light-dark(hsl(205 4% 92%), hsl(205 6% 21%));
+  --line: light-dark(hsl(205 3% 88%), hsl(205 6% 27%));
+  --line-strong: light-dark(hsl(205 3% 78%), hsl(205 6% 36%));
+
+  --text: light-dark(hsl(205 4% 13%), hsl(205 3% 97%));
+  --text-muted: light-dark(hsl(205 3% 40%), hsl(205 4% 72%));
+  --text-subtle: light-dark(hsl(205 3% 52%), hsl(205 4% 56%));
+
+  --brand: light-dark(#1c7fb8, #2aabee);
+  --brand-strong: light-dark(#176a99, #50baf1);
+  --brand-soft: light-dark(rgb(28 127 184 / 11%), rgb(42 171 238 / 15%));
+  --on-brand: light-dark(#0a0a0a, #0a0a0a);
+  --focus-ring: light-dark(#1c7fb8, #59bef2);
+
+  --shadow-color: light-dark(rgb(8 35 51 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(8 35 51 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(28 127 184 / 14%), #094a6c);
+  --hero-2: light-dark(hsl(205 4% 97%), hsl(205 6% 11%));
+  --hero-glow: light-dark(rgb(28 127 184 / 14%), rgb(42 171 238 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(205, 6%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* ספוטיפיי — ירוק על שחור */
+:root[data-theme='spotify'] {
+  --bg: light-dark(hsl(140 2% 97%), hsl(140 2% 6%));
+  --bg-elevated: light-dark(hsl(140 0% 100%), hsl(140 2% 9%));
+  --surface: light-dark(hsl(140 0% 100%), hsl(140 2% 12%));
+  --surface-2: light-dark(hsl(140 1% 96%), hsl(140 2% 16%));
+  --surface-3: light-dark(hsl(140 1% 92%), hsl(140 2% 21%));
+  --line: light-dark(hsl(140 0% 88%), hsl(140 0% 27%));
+  --line-strong: light-dark(hsl(140 0% 78%), hsl(140 0% 36%));
+
+  --text: light-dark(hsl(140 1% 13%), hsl(140 1% 97%));
+  --text-muted: light-dark(hsl(140 1% 40%), hsl(140 1% 72%));
+  --text-subtle: light-dark(hsl(140 1% 52%), hsl(140 1% 56%));
+
+  --brand: light-dark(#118a3e, #1ed760);
+  --brand-strong: light-dark(#0d6a30, #3ae477);
+  --brand-soft: light-dark(rgb(17 138 62 / 11%), rgb(30 215 96 / 15%));
+  --on-brand: light-dark(#0a0a0a, #0a0a0a);
+  --focus-ring: light-dark(#118a3e, #43e57d);
+
+  --shadow-color: light-dark(rgb(0 2 1 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(0 2 1 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(17 138 62 / 14%), #0a4820);
+  --hero-2: light-dark(hsl(140 1% 97%), hsl(140 2% 11%));
+  --hero-glow: light-dark(rgb(17 138 62 / 14%), rgb(30 215 96 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(140, 2%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* X — שחור־לבן */
+:root[data-theme='x'] {
+  --bg: light-dark(hsl(0 0% 97%), hsl(0 0% 6%));
+  --bg-elevated: light-dark(hsl(0 0% 100%), hsl(0 0% 9%));
+  --surface: light-dark(hsl(0 0% 100%), hsl(0 0% 12%));
+  --surface-2: light-dark(hsl(0 0% 96%), hsl(0 0% 16%));
+  --surface-3: light-dark(hsl(0 0% 92%), hsl(0 0% 21%));
+  --line: light-dark(hsl(0 0% 88%), hsl(0 0% 27%));
+  --line-strong: light-dark(hsl(0 0% 78%), hsl(0 0% 36%));
+
+  --text: light-dark(hsl(0 0% 13%), hsl(0 0% 97%));
+  --text-muted: light-dark(hsl(0 0% 40%), hsl(0 0% 72%));
+  --text-subtle: light-dark(hsl(0 0% 52%), hsl(0 0% 56%));
+
+  --brand: light-dark(#0f1419, #ffffff);
+  --brand-strong: light-dark(#020203, #ffffff);
+  --brand-soft: light-dark(rgb(15 20 25 / 11%), rgb(255 255 255 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#0f1419, #ffffff);
+
+  --shadow-color: light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(0 0 0 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(15 20 25 / 14%), #adadad);
+  --hero-2: light-dark(hsl(0 0% 97%), hsl(0 0% 11%));
+  --hero-glow: light-dark(rgb(15 20 25 / 14%), rgb(255 255 255 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(0, 0%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* קלאסי — כחול נייטרלי */
+:root[data-theme='classic'] {
+  --bg: light-dark(hsl(210 3% 97%), hsl(210 4% 6%));
+  --bg-elevated: light-dark(hsl(210 0% 100%), hsl(210 4% 9%));
+  --surface: light-dark(hsl(210 0% 100%), hsl(210 4% 12%));
+  --surface-2: light-dark(hsl(210 2% 96%), hsl(210 4% 16%));
+  --surface-3: light-dark(hsl(210 2% 92%), hsl(210 4% 21%));
+  --line: light-dark(hsl(210 1% 88%), hsl(210 2% 27%));
+  --line-strong: light-dark(hsl(210 1% 78%), hsl(210 2% 36%));
+
+  --text: light-dark(hsl(210 2% 13%), hsl(210 2% 97%));
+  --text-muted: light-dark(hsl(210 2% 40%), hsl(210 2% 72%));
+  --text-subtle: light-dark(hsl(210 2% 52%), hsl(210 2% 56%));
+
+  --brand: light-dark(#1d4ed8, #60a5fa);
+  --brand-strong: light-dark(#1943b9, #88bbfb);
+  --brand-soft: light-dark(rgb(29 78 216 / 11%), rgb(96 165 250 / 15%));
+  --on-brand: light-dark(#ffffff, #0a0a0a);
+  --focus-ring: light-dark(#1d4ed8, #91c1fc);
+
+  --shadow-color: light-dark(rgb(11 29 81 / 10%), rgb(0 0 0 / 42%));
+  --shadow-color-strong: light-dark(rgb(11 29 81 / 15%), rgb(0 0 0 / 55%));
+  --hero-1: light-dark(rgb(29 78 216 / 14%), #0652b1);
+  --hero-2: light-dark(hsl(210 2% 97%), hsl(210 4% 11%));
+  --hero-glow: light-dark(rgb(29 78 216 / 14%), rgb(96 165 250 / 20%));
+  --header-bg: light-dark(rgb(255 255 255 / 86%), hsla(210, 4%, 6%, 0.82));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 72%));
+}
+
+/* שחור מוחלט — pixels that are actually off on an OLED screen.
+   Its light half is the opposite promise: pure white, no tint at all. */
 :root[data-theme='black'] {
-  color-scheme: dark;
+  --bg: light-dark(#ffffff, #000000);
+  --bg-elevated: light-dark(#ffffff, #050505);
+  --surface: light-dark(#ffffff, #0a0a0a);
+  --surface-2: light-dark(#f4f4f5, #141414);
+  --surface-3: light-dark(#e7e7ea, #1e1e1e);
+  --line: light-dark(#dcdce0, #262626);
+  --line-strong: light-dark(#bcbcc2, #3a3a3a);
 
-  --bg: #000000;
-  --bg-elevated: #08060c;
-  --surface: #0d0a12;
-  --surface-2: #16111d;
-  --surface-3: #1f1829;
-  --line: #241d30;
-  --line-strong: #372c48;
+  --text: light-dark(#0a0a0a, #fafafa);
+  --text-muted: light-dark(#57575e, #a3a3a3);
+  --text-subtle: light-dark(#78787f, #737373);
 
-  --text: #f4f1f8;
-  --text-muted: #a99cba;
-  --text-subtle: #7d7090;
-  --text-inverse: #000000;
+  --brand: light-dark(#7e22ce, #c084fc);
+  --brand-strong: light-dark(#6b21a8, #d8b4fe);
+  --brand-soft: light-dark(rgb(126 34 206 / 10%), rgb(192 132 252 / 16%));
+  --on-brand: light-dark(#ffffff, #14091f);
+  --focus-ring: light-dark(#7e22ce, #d8b4fe);
 
-  --brand: var(--purple-400);
-  --brand-strong: var(--purple-300);
-  --brand-soft: rgb(192 132 252 / 16%);
-  --on-brand: #14091f;
-
-  --success: var(--green-400);
-  --warning: var(--amber-400);
-  --danger: var(--red-400);
-
-  --shadow-sm: 0 2px 8px rgb(0 0 0 / 70%);
-  --shadow-md: 0 12px 32px rgb(0 0 0 / 80%);
-  --shadow-lg: 0 28px 70px rgb(0 0 0 / 90%);
-
-  --hero-bg: radial-gradient(120% 90% at 50% 0%, #1d0f30 0%, #0a0512 50%, var(--bg) 80%);
-  --hero-glow: rgb(192 132 252 / 18%);
-  --header-bg: rgb(0 0 0 / 88%);
-  --scrim: rgb(0 0 0 / 88%);
+  --shadow-color: light-dark(rgb(0 0 0 / 10%), rgb(0 0 0 / 70%));
+  --shadow-color-strong: light-dark(rgb(0 0 0 / 16%), rgb(0 0 0 / 85%));
+  --hero-1: light-dark(rgb(126 34 206 / 12%), #1a0f28);
+  --hero-2: light-dark(#fafafa, #060606);
+  --hero-glow: light-dark(rgb(126 34 206 / 12%), rgb(192 132 252 / 18%));
+  --header-bg: light-dark(rgb(255 255 255 / 88%), rgb(0 0 0 / 86%));
+  --scrim: light-dark(rgb(20 16 28 / 45%), rgb(0 0 0 / 82%));
 }
 
-/* --------------------------------------------------------- Accent colour
-   Applied on top of any theme, so a visitor can keep the dark violet layout
-   but make the highlights green. `purple` is the default and adds nothing. */
+/* ניגודיות גבוהה — an accessibility palette, kept as a theme as well as a
+   setting so it can be chosen directly. Pure black on pure white, or the
+   reverse: no tinted surfaces, no shadows, and a ring that is never subtle.
+   `--accessible-contrast` (see accessibility.css) applies the same idea on
+   top of any other theme. */
+:root[data-theme='contrast'] {
+  --bg: light-dark(#ffffff, #000000);
+  --bg-elevated: light-dark(#ffffff, #000000);
+  --surface: light-dark(#ffffff, #000000);
+  --surface-2: light-dark(#ffffff, #0d0d0d);
+  --surface-3: light-dark(#f2f2f2, #1a1a1a);
+  --line: light-dark(#000000, #ffffff);
+  --line-strong: light-dark(#000000, #ffffff);
+
+  --text: light-dark(#000000, #ffffff);
+  --text-muted: light-dark(#1a1a1a, #f0f0f0);
+  --text-subtle: light-dark(#333333, #e0e0e0);
+
+  --brand: light-dark(#0000cc, #ffd400);
+  --brand-strong: light-dark(#000099, #ffe866);
+  --brand-soft: light-dark(rgb(0 0 204 / 12%), rgb(255 212 0 / 22%));
+  --on-brand: light-dark(#ffffff, #000000);
+  --focus-ring: light-dark(#000000, #ffffff);
+
+  --shadow-color: transparent;
+  --shadow-color-strong: transparent;
+  --hero-1: light-dark(#ffffff, #000000);
+  --hero-2: light-dark(#ffffff, #000000);
+  --hero-glow: transparent;
+  --header-bg: light-dark(#ffffff, #000000);
+  --scrim: light-dark(rgb(0 0 0 / 60%), rgb(0 0 0 / 85%));
+}
+
+/* ------------------------------------------------------------ Accent axis
+   An optional override of the brand colour, on top of any theme.
+   `data-accent="theme"` is the default and sets nothing at all — which is what
+   lets a brand theme keep the colour that makes it that brand. These blocks
+   come last so an explicit accent wins over the theme's own brand; they carry
+   `--on-brand` and `--focus-ring` with them, because changing a brand colour
+   and leaving the text colour behind is how a label ends up the same shade as
+   the button it sits on. */
+:root[data-accent='purple'] {
+  --brand: light-dark(#7e22ce, #a855f7);
+  --brand-strong: light-dark(#6b21a8, #c084fc);
+  --brand-soft: light-dark(rgb(126 34 206 / 11%), rgb(168 85 247 / 15%));
+  --on-brand: light-dark(#ffffff, #ffffff);
+  --focus-ring: light-dark(#7e22ce, #c084fc);
+}
+
 :root[data-accent='blue'] {
-  --brand: #3b82f6;
-  --brand-strong: #60a5fa;
-  --brand-soft: rgb(59 130 246 / 14%);
-  --on-brand: #ffffff;
+  --brand: light-dark(#1d4ed8, #60a5fa);
+  --brand-strong: light-dark(#1e40af, #93c5fd);
+  --brand-soft: light-dark(rgb(29 78 216 / 11%), rgb(96 165 250 / 15%));
+  --on-brand: light-dark(#ffffff, #0a1020);
+  --focus-ring: light-dark(#1d4ed8, #93c5fd);
 }
 
 :root[data-accent='green'] {
-  --brand: #10b981;
-  --brand-strong: #34d399;
-  --brand-soft: rgb(16 185 129 / 14%);
-  --on-brand: #052e21;
+  --brand: light-dark(#15803d, #4ade80);
+  --brand-strong: light-dark(#166534, #86efac);
+  --brand-soft: light-dark(rgb(21 128 61 / 11%), rgb(74 222 128 / 15%));
+  --on-brand: light-dark(#ffffff, #052e16);
+  --focus-ring: light-dark(#15803d, #86efac);
 }
 
 :root[data-accent='orange'] {
-  --brand: #f97316;
-  --brand-strong: #fb923c;
-  --brand-soft: rgb(249 115 22 / 14%);
-  --on-brand: #2a1102;
+  --brand: light-dark(#c2410c, #fb923c);
+  --brand-strong: light-dark(#9a3412, #fdba74);
+  --brand-soft: light-dark(rgb(194 65 12 / 11%), rgb(251 146 60 / 15%));
+  --on-brand: light-dark(#ffffff, #2a1102);
+  --focus-ring: light-dark(#c2410c, #fdba74);
 }
 
 :root[data-accent='gold'] {
-  --brand: #f5bd38;
-  --brand-strong: #ffd76b;
-  --brand-soft: rgb(245 189 56 / 14%);
-  --on-brand: #17110a;
+  --brand: light-dark(#a16207, #f5bd38);
+  --brand-strong: light-dark(#854d0e, #ffd76b);
+  --brand-soft: light-dark(rgb(161 98 7 / 11%), rgb(245 189 56 / 15%));
+  --on-brand: light-dark(#ffffff, #17110a);
+  --focus-ring: light-dark(#a16207, #ffd76b);
 }
 
-/* -------------------------------------------------- System colour scheme
-   Only applies while no explicit theme is stored; the bootstrap script writes
-   `data-theme` as soon as the visitor chooses one. */
-@media (prefers-color-scheme: light) {
-  :root[data-theme='system'] {
-    color-scheme: light;
+:root[data-accent='rose'] {
+  --brand: light-dark(#be123c, #fb7185);
+  --brand-strong: light-dark(#9f1239, #fda4af);
+  --brand-soft: light-dark(rgb(190 18 60 / 11%), rgb(251 113 133 / 15%));
+  --on-brand: light-dark(#ffffff, #2a0810);
+  --focus-ring: light-dark(#be123c, #fda4af);
+}
 
-    --bg: var(--ink-50);
-    --bg-elevated: var(--ink-0);
-    --surface: var(--ink-0);
-    --surface-2: var(--ink-100);
-    --surface-3: var(--ink-200);
-    --line: #e2dbec;
-    --line-strong: #cdc1dc;
+:root[data-accent='teal'] {
+  --brand: light-dark(#0d8f86, #22d3c5);
+  --brand-strong: light-dark(#0b7a72, #5eead4);
+  --brand-soft: light-dark(rgb(13 143 134 / 11%), rgb(34 211 197 / 15%));
+  --on-brand: light-dark(#ffffff, #022a28);
+  --focus-ring: light-dark(#0d8f86, #5eead4);
+}
 
-    --text: var(--ink-900);
-    --text-muted: var(--ink-500);
-    --text-subtle: var(--ink-400);
-    --text-inverse: var(--ink-0);
+/* --------------------------------------------------------- Status colours
+   One definition, both modes. These were dark-tuned constants that every light
+   palette inherited unchanged, so "success" was a pale mint on white. The
+   `-soft` variants exist because five component rules were hardcoding the dark
+   tints inline. */
+:root {
+  --success: light-dark(#15803d, #34d399);
+  --warning: light-dark(#a16207, #fbbf24);
+  --danger: light-dark(#be123c, #fb7185);
 
-    --brand: var(--purple-700);
-    --brand-strong: var(--purple-600);
-    --brand-soft: rgb(126 34 206 / 10%);
-    --on-brand: #ffffff;
-
-    --shadow-sm: 0 1px 3px rgb(41 31 51 / 8%);
-    --shadow-md: 0 10px 28px rgb(41 31 51 / 12%);
-    --shadow-lg: 0 24px 60px rgb(41 31 51 / 16%);
-
-    --hero-bg: radial-gradient(120% 90% at 50% 0%, #efe4fb 0%, #f7f3fc 48%, var(--bg) 80%);
-    --hero-glow: rgb(126 34 206 / 12%);
-    --header-bg: rgb(255 255 255 / 86%);
-    --scrim: rgb(30 20 45 / 45%);
-  }
+  --success-soft: light-dark(rgb(21 128 61 / 10%), rgb(52 211 153 / 14%));
+  --warning-soft: light-dark(rgb(161 98 7 / 10%), rgb(251 191 36 / 14%));
+  --danger-soft: light-dark(rgb(190 18 60 / 10%), rgb(251 113 133 / 14%));
 }

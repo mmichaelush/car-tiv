@@ -26,6 +26,7 @@ import { debounce, html, on, select, setHtml, type SafeHtml } from '../../ui/dom
 import { icon, type IconName } from '../../ui/icons.js';
 import { normalizeText } from '@shared/core/text.js';
 import { openThemeDialog } from '../preferences/theme-dialog.js';
+import { isDarkNow } from '../preferences/preferences.js';
 import { openLibraryDialog } from '../library/library-dialog.js';
 import { readPreferences, updatePreferences } from '../preferences/preferences.js';
 
@@ -323,12 +324,22 @@ function buildCommands(): Command[] {
       run: openThemeDialog,
     },
     {
+      // Flips the brightness and keeps the colour family.
+      //
+      // This used to swap `theme` between 'light' and 'purple', because light
+      // was itself a theme — so asking for light mode discarded whatever family
+      // the visitor had chosen, and asking for dark afterwards returned them to
+      // purple rather than to what they had. Now it moves along the mode axis
+      // and the theme is untouched.
+      //
+      // From `auto` it commits to the opposite of what the device is currently
+      // showing, which is what someone means by "switch" while auto is on.
       id: 'theme-toggle',
-      label: preferences.theme === 'light' ? 'מעבר למצב כהה' : 'מעבר למצב בהיר',
-      keywords: 'dark light mode כהה בהיר',
-      iconName: preferences.theme === 'light' ? 'moon' : 'sun',
+      label: isDarkNow() ? 'מעבר למצב בהיר' : 'מעבר למצב כהה',
+      keywords: 'dark light mode כהה בהיר יום לילה',
+      iconName: isDarkNow() ? 'sun' : 'moon',
       run: () => {
-        updatePreferences({ theme: preferences.theme === 'light' ? 'purple' : 'light' });
+        updatePreferences({ colorMode: isDarkNow() ? 'light' : 'dark' });
       },
     },
     {

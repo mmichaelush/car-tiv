@@ -31,6 +31,18 @@ import {
 import { buildMatchExpression } from './search-expression.js';
 
 /** Columns selected for a card. Kept in one constant so every query agrees. */
+/**
+ * Characters of the description a listing row carries. Two lines of text.
+ *
+ * The list view on a wide screen has a column of empty space beside the
+ * thumbnail, and the obvious fix — send the description — means shipping 7,876
+ * of them through a listing endpoint that is cached at the edge and read on
+ * every page. Capping it in SQL with substr() means the row never carries more
+ * than this however long the description is, so a page of 24 costs a couple of
+ * kilobytes rather than tens.
+ */
+const EXCERPT_LENGTH = 180;
+
 const SUMMARY_COLUMNS = `
   v.id                AS id,
   v.title             AS title,
@@ -49,7 +61,9 @@ const SUMMARY_COLUMNS = `
     SELECT group_concat(t.name, '${LIST_SEPARATOR}')
     FROM video_tags vt JOIN tags t ON t.id = vt.tag_id
     WHERE vt.video_id = v.id AND t.is_visible = 1
-  ) AS tagNames`;
+  ) AS tagNames,
+  -- A short excerpt, not the description. See EXCERPT_LENGTH above.
+  substr(v.description, 1, ${String(EXCERPT_LENGTH)}) AS excerpt`;
 
 const SUMMARY_FROM = `
   FROM videos v
@@ -107,6 +121,7 @@ interface SummaryRow {
   isHebrew: number;
   isFeatured: number;
   tagNames: string | null;
+  excerpt: string | null;
 }
 
 interface DetailRow extends SummaryRow {
@@ -663,6 +678,7 @@ function toSummary(row: SummaryRow): VideoSummary {
     isHebrew: toBoolean(row.isHebrew),
     isFeatured: toBoolean(row.isFeatured),
     tags: splitList(row.tagNames).slice(0, 6),
+    excerpt: row.excerpt ?? '',
   };
 }
 

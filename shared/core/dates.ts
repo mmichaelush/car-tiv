@@ -90,8 +90,13 @@ export function formatRelativeDate(isoDate: string | null | undefined, now = new
   if (days < 7) return `לפני ${String(days)} ימים`;
   if (days < 14) return 'לפני שבוע';
   if (days < 31) return `לפני ${String(Math.floor(days / 7))} שבועות`;
-  if (days < 61) return 'לפני חודש';
-  if (days < 365) return `לפני ${String(Math.floor(days / 30))} חודשים`;
+
+  // Past a month, the real date. "לפני 7 חודשים" is a worse answer than
+  // "3 בפברואר 2026": it is longer to read, it is wrong by up to a month, and
+  // for a catalog where most videos are older than a year it made almost every
+  // card say a vague thing about a precise fact. Relative wording earns its
+  // place while it is genuinely easier to grasp — today, yesterday, a few days
+  // — and stops earning it after that.
   return formatHebrewDate(isoDate);
 }
 

@@ -57,6 +57,116 @@ const CATEGORY_TAG_AGGREGATE = `
   HAVING COUNT(*) >= 2`;
 
 /**
+ * Live videos for one tag.
+ *
+ * `EXISTS` rather than a join, and the difference is not stylistic. Written as
+ * `FROM video_tags vt JOIN videos v ON v.id = vt.video_id WHERE vt.tag_id = …`,
+ * SQLite inverts the join: it drives from `videos` through
+ * `idx_videos_live_added` — scanning all 7,876 live rows — and probes
+ * `video_tags` by `(video_id, tag_id)`, so `idx_video_tags_tag` is never used
+ * and the whole catalog is scanned once per tag. Measured on the real data:
+ *
+ * | form                       | cold refresh of 10,732 tags |
+ * | -------------------------- | --------------------------: |
+ * | join (what this was)       |            **~215 seconds** |
+ * | `EXISTS` (what this is)    |                   **155ms** |
+ *
+ * Both produce identical counts; only the plan differs. The warm case — the
+ * hourly cron, where nothing changed — is 63ms.
+ *
+ * This was invisible until the counters were run against a genuinely cold
+ * database, because the guard means a refresh of an already-correct database
+ * evaluates the same subquery and still finishes quickly enough not to notice.
+ * The first import of a new deployment is exactly the cold case, so this would
+ * have hung the one run that has to work.
+ */
+const TAG_LIVE_COUNT = `(
+      SELECT COUNT(*) FROM video_tags vt
+      WHERE vt.tag_id = tags.id
+        AND EXISTS (
+          SELECT 1 FROM videos v
+          WHERE v.id = vt.video_id
+            AND v.status = 'published' AND v.deleted_at IS NULL
+        )
+    )`;
+
+/** Live-video count for one row of a table, as a scalar subquery. */
+const liveCount = (table: string, column: string): string => `(
+      SELECT COUNT(*) FROM videos v
+      WHERE v.${column} = ${table}.id
+        AND v.status = 'published' AND v.deleted_at IS NULL
+    )`;
+
+/**
+ * The statements a counter refresh runs, in order.
+ *
+ * Exported, and the single definition of this SQL, because it has two
+ * consumers that must never disagree: `refreshAll()` below, and
+ * `scripts/build-catalog.ts`, which writes them into the last file of the
+ * generated catalog import.
+ *
+ * That second consumer is the fix for a whole class of "the site looks broken"
+ * report. Every maintained counter starts at zero, and the public catalog reads
+ * them rather than counting rows: `listPopularTags` filters on
+ * `t.video_count > 0`, the category-scoped tag list reads
+ * `category_tag_counts`, and both the category chips and the channel list show
+ * `video_count`. So a database that was imported but never refreshed serves an
+ * empty tag cloud, an empty tag filter and zeroes everywhere — which looks
+ * exactly like the advanced filtering being broken rather than like a missing
+ * step. It was documented as step 5 of the deployment, and a documented step is
+ * one a person can skip. Now the import carries it.
+ *
+ * Every statement is idempotent and guarded, so running the refresh twice
+ * writes nothing the second time.
+ */
+export const COUNTER_REFRESH = {
+  categories:
+    `UPDATE categories SET video_count = ${liveCount('categories', 'category_id')} ` +
+    `WHERE video_count <> ${liveCount('categories', 'category_id')}`,
+
+  channels:
+    `UPDATE channels SET video_count = ${liveCount('channels', 'channel_id')} ` +
+    `WHERE video_count <> ${liveCount('channels', 'channel_id')}`,
+
+  tags: `UPDATE tags SET video_count = ${TAG_LIVE_COUNT} WHERE video_count <> ${TAG_LIVE_COUNT}`,
+
+  categoryTagsUpsert: `INSERT INTO category_tag_counts (category_id, tag_id, video_count)
+     SELECT f.category_id, f.tag_id, f.n
+     FROM (${CATEGORY_TAG_AGGREGATE}) f
+     LEFT JOIN category_tag_counts c
+       ON c.category_id = f.category_id AND c.tag_id = f.tag_id
+     WHERE c.video_count IS NULL OR c.video_count <> f.n
+     ON CONFLICT (category_id, tag_id) DO UPDATE
+       SET video_count = excluded.video_count`,
+
+  categoryTagsDelete: `DELETE FROM category_tag_counts
+     WHERE NOT EXISTS (
+       SELECT 1 FROM (${CATEGORY_TAG_AGGREGATE}) f
+       WHERE f.category_id = category_tag_counts.category_id
+         AND f.tag_id = category_tag_counts.tag_id
+     )`,
+
+  totals: `INSERT INTO catalog_counters (key, value, updated_at)
+     SELECT 'videos.live',
+            (SELECT COUNT(*) FROM videos WHERE status = 'published' AND deleted_at IS NULL),
+            CURRENT_TIMESTAMP
+     UNION ALL SELECT 'videos.addedThisWeek',
+            (SELECT COUNT(*) FROM videos
+             WHERE status = 'published' AND deleted_at IS NULL
+               AND added_at >= date('now', '-7 days')),
+            CURRENT_TIMESTAMP
+     UNION ALL SELECT 'channels.visible',
+            (SELECT COUNT(*) FROM channels WHERE is_visible = 1), CURRENT_TIMESTAMP
+     UNION ALL SELECT 'categories.visible',
+            (SELECT COUNT(*) FROM categories WHERE is_visible = 1), CURRENT_TIMESTAMP
+     UNION ALL SELECT 'tags.visible',
+            (SELECT COUNT(*) FROM tags WHERE is_visible = 1 AND video_count > 0),
+            CURRENT_TIMESTAMP
+     ON CONFLICT (key) DO UPDATE
+       SET value = excluded.value, updated_at = excluded.updated_at`,
+} as const;
+
+/**
  * Tables whose size follows traffic rather than the catalog.
  *
  * Every table the retention pass prunes must appear here, and in
@@ -207,41 +317,19 @@ export class CountersRepository extends BaseRepository {
 
   /** Live videos per category. */
   async #refreshCategories(): Promise<number> {
-    const live = `(
-      SELECT COUNT(*) FROM videos v
-      WHERE v.category_id = categories.id
-        AND v.status = 'published' AND v.deleted_at IS NULL
-    )`;
-    const result = await this.run(
-      `UPDATE categories SET video_count = ${live} WHERE video_count <> ${live}`,
-    );
+    const result = await this.run(COUNTER_REFRESH.categories);
     return Number(result.meta.changes);
   }
 
   /** Live videos per channel. */
   async #refreshChannels(): Promise<number> {
-    const live = `(
-      SELECT COUNT(*) FROM videos v
-      WHERE v.channel_id = channels.id
-        AND v.status = 'published' AND v.deleted_at IS NULL
-    )`;
-    const result = await this.run(
-      `UPDATE channels SET video_count = ${live} WHERE video_count <> ${live}`,
-    );
+    const result = await this.run(COUNTER_REFRESH.channels);
     return Number(result.meta.changes);
   }
 
   /** Live videos per tag. */
   async #refreshTags(): Promise<number> {
-    const live = `(
-      SELECT COUNT(*) FROM video_tags vt
-      JOIN videos v ON v.id = vt.video_id
-      WHERE vt.tag_id = tags.id
-        AND v.status = 'published' AND v.deleted_at IS NULL
-    )`;
-    const result = await this.run(
-      `UPDATE tags SET video_count = ${live} WHERE video_count <> ${live}`,
-    );
+    const result = await this.run(COUNTER_REFRESH.tags);
     return Number(result.meta.changes);
   }
 
@@ -257,57 +345,16 @@ export class CountersRepository extends BaseRepository {
    *
    * Verified against the real catalog to leave a byte-identical table to the
    * full rebuild, and to write nothing at all when nothing changed.
-   *
-   * Only pairs worth showing are stored: a tag used once in a category never
-   * reaches a filter panel, and keeping the long tail would double the table
-   * for no visible effect.
    */
   async #refreshCategoryTags(): Promise<number> {
-    const upserted = await this.run(
-      `INSERT INTO category_tag_counts (category_id, tag_id, video_count)
-       SELECT f.category_id, f.tag_id, f.n
-       FROM (${CATEGORY_TAG_AGGREGATE}) f
-       LEFT JOIN category_tag_counts c
-         ON c.category_id = f.category_id AND c.tag_id = f.tag_id
-       WHERE c.video_count IS NULL OR c.video_count <> f.n
-       ON CONFLICT (category_id, tag_id) DO UPDATE
-         SET video_count = excluded.video_count`,
-    );
-
-    const deleted = await this.run(
-      `DELETE FROM category_tag_counts
-       WHERE NOT EXISTS (
-         SELECT 1 FROM (${CATEGORY_TAG_AGGREGATE}) f
-         WHERE f.category_id = category_tag_counts.category_id
-           AND f.tag_id = category_tag_counts.tag_id
-       )`,
-    );
-
+    const upserted = await this.run(COUNTER_REFRESH.categoryTagsUpsert);
+    const deleted = await this.run(COUNTER_REFRESH.categoryTagsDelete);
     return Number(upserted.meta.changes) + Number(deleted.meta.changes);
   }
 
   /** The five catalog-wide numbers. */
   async #refreshTotals(): Promise<void> {
-    await this.run(
-      `INSERT INTO catalog_counters (key, value, updated_at)
-       SELECT 'videos.live',
-              (SELECT COUNT(*) FROM videos WHERE status = 'published' AND deleted_at IS NULL),
-              CURRENT_TIMESTAMP
-       UNION ALL SELECT 'videos.addedThisWeek',
-              (SELECT COUNT(*) FROM videos
-               WHERE status = 'published' AND deleted_at IS NULL
-                 AND added_at >= date('now', '-7 days')),
-              CURRENT_TIMESTAMP
-       UNION ALL SELECT 'channels.visible',
-              (SELECT COUNT(*) FROM channels WHERE is_visible = 1), CURRENT_TIMESTAMP
-       UNION ALL SELECT 'categories.visible',
-              (SELECT COUNT(*) FROM categories WHERE is_visible = 1), CURRENT_TIMESTAMP
-       UNION ALL SELECT 'tags.visible',
-              (SELECT COUNT(*) FROM tags WHERE is_visible = 1 AND video_count > 0),
-              CURRENT_TIMESTAMP
-       ON CONFLICT (key) DO UPDATE
-         SET value = excluded.value, updated_at = excluded.updated_at`,
-    );
+    await this.run(COUNTER_REFRESH.totals);
   }
 
   // -------------------------------------------------------------------------

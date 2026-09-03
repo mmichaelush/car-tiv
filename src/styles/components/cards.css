@@ -283,19 +283,70 @@
   font-size: var(--text-xs);
 }
 
+/* The tags the API sends. Links, not labels: the fastest route from a card
+   into the filtered listing for that tag. `position: relative` lifts them above
+   the title's stretched `::after`, which otherwise swallows the click. */
 .video-card__tags {
+  position: relative;
+  z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--space-1);
+  margin: 0;
+  margin-block-start: var(--space-2);
+  padding: 0;
+  list-style: none;
   overflow: hidden;
+  max-block-size: 1.75rem;
 }
 
-.video-card__tags span {
-  padding: 2px 7px;
+.chip--tag {
+  display: inline-block;
+  padding: 2px 9px;
+  border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: var(--surface-2);
   color: var(--text-subtle);
   font-size: var(--text-xs);
   white-space: nowrap;
+  transition:
+    background var(--duration-fast) var(--ease-out),
+    color var(--duration-fast) var(--ease-out);
+}
+
+.chip--tag:hover,
+.chip--tag:focus-visible {
+  background: var(--brand-soft);
+  border-color: var(--brand);
+  color: var(--brand);
+}
+
+/* The description only appears where there is genuinely room for it — the list
+   view on a wide screen, which otherwise leaves a column of empty space beside
+   the thumbnail. In the grid it would push the card out of shape. */
+.video-card__description {
+  display: none;
+  margin: 0;
+  margin-block-start: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--text-sm);
+  line-height: var(--leading-relaxed);
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.video-card__description {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .video-grid[data-view='list'] .video-card__description {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 3;
+  }
 }
 
 /* Card actions sit above the full-card link, so they stay clickable. */
@@ -581,4 +632,18 @@
   display: flex;
   align-items: center;
   gap: var(--space-2);
+}
+
+/* An illustration in an empty state, rather than a glyph in a circle.
+   Capped so it stays an accent on a small screen instead of the whole view. */
+.empty-state__art {
+  display: block;
+  inline-size: min(220px, 60vw);
+  margin-inline: auto;
+  margin-block-end: var(--space-2);
+}
+
+.empty-state__art svg {
+  inline-size: 100%;
+  block-size: auto;
 }

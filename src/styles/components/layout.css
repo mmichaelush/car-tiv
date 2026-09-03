@@ -6,6 +6,17 @@
    Sticky, translucent, and the same on every page. Built by
    `src/ui/layout/header.ts` so a nav change is one edit. */
 
+/* The page, inset by the rail.
+   The header deliberately is not: it spans the full width with the brand over
+   the rail, which is what makes the rail read as part of the page rather than
+   as a floating panel. `--rail-width` is 0 until the wide-screen query, so on
+   a phone this adds nothing. */
+main,
+.site-footer {
+  padding-inline-start: var(--rail-width);
+  transition: padding-inline-start var(--duration-base) var(--ease-out);
+}
+
 .site-header {
   position: sticky;
   inset-block-start: 0;
@@ -42,30 +53,196 @@
   color: var(--brand);
 }
 
-.main-nav {
-  display: flex;
-  align-items: center;
-  gap: var(--space-1);
+/* ============================================================ Navigation rail
+
+   One element that is a rail on a wide screen and a drawer on a narrow one.
+
+   The links used to sit inline in the header, which capped how many there
+   could be and pushed the search field into whatever space was left. A rail
+   holds the whole navigation at once, gives every entry an icon, and leaves
+   the header for the things that belong to the *current* page — search,
+   account, settings.
+
+   Width is a custom property so exactly one number moves the content. Nothing
+   uses a hardcoded offset. */
+:root {
+  --rail-expanded: 15rem;
+  --rail-collapsed: 4.75rem;
+  /* Zero until the wide-screen media query below opens it. On a phone the rail
+     is off-canvas, so the page must not be inset at all. */
+  --rail-width: 0px;
 }
 
-.main-nav a {
+.site-rail {
+  position: fixed;
+  z-index: var(--z-sticky);
+  inset-block: var(--header-height) 0;
+  inset-inline-start: 0;
+  inline-size: var(--rail-expanded);
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-3) var(--space-2) var(--space-4);
+  background: var(--bg-elevated);
+  border-inline-end: 1px solid var(--line);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+
+  /* Off-canvas by default; the wide-screen query below puts it back. Moving it
+     by its own width rather than by a fixed number means it is always exactly
+     off the edge, in either writing direction. */
+  transform: translateX(var(--rail-hidden-shift, 100%));
+  transition: transform var(--duration-base) var(--ease-out);
+  visibility: hidden;
+}
+
+/* RTL: the rail is on the right, so "off the edge" is the other direction. */
+:dir(rtl) .site-rail {
+  --rail-hidden-shift: 100%;
+}
+
+:dir(ltr) .site-rail {
+  --rail-hidden-shift: -100%;
+}
+
+:root[data-rail-open] .site-rail {
+  transform: translateX(0);
+  visibility: visible;
+  box-shadow: var(--shadow-lg);
+}
+
+.site-rail__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: calc(var(--z-sticky) - 1);
+  background: var(--scrim);
+}
+
+.site-rail__nav {
+  flex: 1;
+}
+
+.site-rail__nav ul {
+  display: grid;
+  gap: 2px;
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+}
+
+.site-rail__group {
+  margin: var(--space-3) var(--space-3) var(--space-2);
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.site-rail__nav ul:first-of-type,
+.site-rail__group:first-child {
+  margin-block-start: 0;
+}
+
+.site-rail a,
+.site-rail__collapse {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  inline-size: 100%;
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-md);
   color: var(--text-muted);
   font-size: var(--text-base);
+  text-align: start;
   transition:
     color var(--duration-fast) var(--ease-out),
     background-color var(--duration-fast) var(--ease-out);
 }
 
-.main-nav a:hover {
+.site-rail a:hover,
+.site-rail__collapse:hover {
   color: var(--text);
   background: var(--surface-2);
 }
 
-.main-nav a[aria-current='page'] {
+.site-rail a[aria-current='page'] {
   color: var(--brand);
   background: var(--brand-soft);
+  font-weight: var(--weight-bold);
+}
+
+.site-rail__icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 24px;
+}
+
+.site-rail__label {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.site-rail__collapse {
+  margin-block-start: auto;
+  border-block-start: 1px solid var(--line);
+  border-radius: 0;
+  padding-block-start: var(--space-3);
+  color: var(--text-subtle);
+}
+
+/* The collapse control is meaningless while the rail is a drawer: a drawer is
+   already either open or closed. */
+.site-rail__collapse {
+  display: none;
+}
+
+@media (min-width: 1100px) {
+  /* The rail is permanent here, so the page is inset by its width and the
+     drawer machinery — scrim, transform, visibility — is all switched off. */
+  :root {
+    --rail-width: var(--rail-expanded);
+  }
+
+  :root[data-rail='collapsed'] {
+    --rail-width: var(--rail-collapsed);
+  }
+
+  .site-rail {
+    inline-size: var(--rail-width);
+    transform: none;
+    visibility: visible;
+    box-shadow: none;
+    transition: inline-size var(--duration-base) var(--ease-out);
+  }
+
+  .site-rail__scrim {
+    display: none;
+  }
+
+  .site-rail__collapse {
+    display: flex;
+  }
+
+  /* Icons only. The label is removed from the layout rather than hidden, so
+     nothing reserves space for it, and `title` keeps the name reachable. */
+  :root[data-rail='collapsed'] .site-rail__label,
+  :root[data-rail='collapsed'] .site-rail__group {
+    display: none;
+  }
+
+  :root[data-rail='collapsed'] .site-rail a,
+  :root[data-rail='collapsed'] .site-rail__collapse {
+    justify-content: center;
+    padding-inline: var(--space-2);
+  }
+
+  :root[data-rail='collapsed'] .site-rail__nav ul {
+    margin-block-end: var(--space-2);
+  }
+
+  :root[data-rail='collapsed'] .site-rail__collapse .site-rail__icon {
+    transform: scaleX(-1);
+  }
 }
 
 .header-actions {
@@ -91,8 +268,20 @@
   min-height: calc(var(--control-height) - 4px);
 }
 
+/* The drawer opener.
+   It was `display: none` here with the only `display: inline-grid` inside a
+   `max-width` query that has since gone — and because this bare rule came
+   later in the file it won at every width, so the button existed, was
+   focusable, and was invisible. Shown by default and removed at the width
+   where the rail is permanent and there is no drawer to open. */
 .menu-toggle {
-  display: none;
+  display: inline-grid;
+}
+
+@media (min-width: 1100px) {
+  .menu-toggle {
+    display: none;
+  }
 }
 
 @media (max-width: 900px) {
@@ -101,32 +290,12 @@
   }
 }
 
-@media (max-width: 760px) {
-  .menu-toggle {
-    display: inline-grid;
-  }
-
-  .main-nav {
-    display: none;
-    position: absolute;
-    inset-block-start: var(--header-height);
-    inset-inline: var(--space-3);
-    flex-direction: column;
-    align-items: stretch;
-    gap: 2px;
-    padding: var(--space-2);
-    background: var(--surface);
-    border: 1px solid var(--line);
-    border-radius: var(--radius-lg);
-    box-shadow: var(--shadow-lg);
-  }
-
-  .main-nav.is-open {
-    display: flex;
-  }
-
-  .main-nav a {
-    padding: var(--space-3);
+/* The drawer is wide enough to read but never the whole screen — a sliver of
+   the page stays visible so it is obvious what is underneath and where to tap
+   to dismiss it. */
+@media (max-width: 480px) {
+  .site-rail {
+    inline-size: min(17rem, 82vw);
   }
 }
 
@@ -386,35 +555,38 @@
 
 /* ---------------------------------------------------------------- Footer */
 
+/* Deliberately shorter than it was. A footer is a place to look something up,
+   not a second page: the links are the same, at a size and spacing that stops
+   it filling a phone screen on its own. */
 .site-footer {
-  margin-block-start: var(--space-8);
-  padding-block: var(--space-7) var(--space-6);
+  margin-block-start: var(--space-7);
+  padding-block: var(--space-5) var(--space-4);
   border-block-start: 1px solid var(--line);
   background: var(--bg-elevated);
 }
 
 .site-footer__grid {
   display: grid;
-  grid-template-columns: minmax(220px, 1.4fr) repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--space-6);
+  grid-template-columns: minmax(200px, 1.3fr) repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4) var(--space-5);
 }
 
 .site-footer h3 {
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   color: var(--text-subtle);
-  margin-block-end: var(--space-3);
+  margin-block-end: var(--space-2);
 }
 
 .site-footer nav {
   display: grid;
-  gap: var(--space-2);
+  gap: 6px;
 }
 
 .site-footer a {
   color: var(--text-muted);
-  font-size: var(--text-base);
+  font-size: var(--text-sm);
   transition: color var(--duration-fast) var(--ease-out);
 }
 
@@ -425,29 +597,35 @@
 .site-footer__about {
   color: var(--text-muted);
   font-size: var(--text-sm);
-  line-height: var(--leading-relaxed);
-  max-inline-size: 32rem;
+  line-height: var(--leading-normal);
+  max-inline-size: 30rem;
 }
 
 .site-footer__bottom {
   display: flex;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: var(--space-3);
-  margin-block-start: var(--space-6);
-  padding-block-start: var(--space-4);
+  gap: var(--space-2) var(--space-4);
+  margin-block-start: var(--space-4);
+  padding-block-start: var(--space-3);
   border-block-start: 1px solid var(--line);
   color: var(--text-subtle);
-  font-size: var(--text-sm);
+  font-size: var(--text-xs);
 }
 
 /* ---------------------------------------------------------- Back to top */
 
+/* On the left, and physically so.
+   The page is RTL, where `inset-inline-start` resolves to the *right* edge —
+   which is where this button was, under the reading hand and over the card
+   actions. `inset-inline-end` is the left on this site; it is written as a
+   logical property rather than `left` so a future LTR page keeps it on the
+   side away from the text, which is the actual intent. */
 .back-to-top {
   position: fixed;
   z-index: var(--z-sticky);
   inset-block-end: var(--space-5);
-  inset-inline-start: var(--space-5);
+  inset-inline-end: var(--space-5);
   inline-size: 46px;
   block-size: 46px;
   display: grid;

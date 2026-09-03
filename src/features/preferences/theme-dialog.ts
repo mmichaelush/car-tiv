@@ -17,6 +17,7 @@ import { icon } from '../../ui/icons.js';
 import { toastSuccess } from '../../ui/components/toast.js';
 import {
   ACCENT_OPTIONS,
+  COLOR_MODE_OPTIONS,
   DENSITY_OPTIONS,
   TEXT_SIZE_OPTIONS,
   THEME_OPTIONS,
@@ -24,7 +25,39 @@ import {
   resetPreferences,
   updatePreferences,
 } from './preferences.js';
-import type { AccentName, Density, TextSize, ThemeName } from '@shared/types/user.js';
+import type { AccentName, ColorMode, Density, TextSize, ThemeName } from '@shared/types/user.js';
+
+/** The theme picker, one group at a time. */
+function themeGroup(
+  group: 'core' | 'brand',
+  label: string,
+  current: ThemeName,
+): ReturnType<typeof html> {
+  return html`
+    <p class="theme-picker__group">${label}</p>
+    <div class="theme-picker" role="radiogroup" aria-label="${label}">
+      ${THEME_OPTIONS.filter((option) => option.group === group).map(
+        (option) => html`
+          <button
+            type="button"
+            class="theme-swatch"
+            role="radio"
+            data-theme-choice="${option.value}"
+            aria-checked="${option.value === current ? 'true' : 'false'}"
+            title="${option.label}"
+          >
+            <span
+              class="theme-swatch__preview"
+              aria-hidden="true"
+              style="--swatch-bg:${option.swatch[0]};--swatch-fg:${option.swatch[1]}"
+            ></span>
+            <span class="theme-swatch__label">${option.label}</span>
+          </button>
+        `,
+      )}
+    </div>
+  `;
+}
 
 export function openThemeDialog(): void {
   const preferences = readPreferences();
@@ -34,28 +67,31 @@ export function openThemeDialog(): void {
     body: html`
       <div class="form-grid">
         <div class="field">
-          <span class="label">${icon('sparkle', { size: 16 })} ערכת נושא</span>
-          <div class="theme-picker" role="radiogroup" aria-label="ערכת נושא">
-            ${THEME_OPTIONS.map(
+          <span class="label">${icon('contrast', { size: 16 })} מצב תצוגה</span>
+          <div class="segmented segmented--wide" role="radiogroup" aria-label="מצב תצוגה">
+            ${COLOR_MODE_OPTIONS.map(
               (option) => html`
                 <button
                   type="button"
-                  class="theme-swatch"
                   role="radio"
-                  data-theme-choice="${option.value}"
-                  aria-checked="${option.value === preferences.theme ? 'true' : 'false'}"
-                  title="${option.label}"
+                  data-mode="${option.value}"
+                  aria-checked="${option.value === preferences.colorMode ? 'true' : 'false'}"
                 >
-                  <span
-                    class="theme-swatch__preview"
-                    aria-hidden="true"
-                    style="--swatch-bg:${option.swatch[0]};--swatch-fg:${option.swatch[1]}"
-                  ></span>
-                  <span class="theme-swatch__label">${option.label}</span>
+                  ${icon(option.icon, { size: 16 })}
+                  <span>${option.label}</span>
                 </button>
               `,
             )}
           </div>
+          <span class="hint">
+            כל ערכת נושא עובדת גם בבהיר וגם בכהה. "לפי המכשיר" מתחלף לבד יחד עם הגדרת המערכת שלכם.
+          </span>
+        </div>
+
+        <div class="field">
+          <span class="label">${icon('sparkle', { size: 16 })} ערכת נושא</span>
+          ${themeGroup('core', 'ערכות צבע', preferences.theme)}
+          ${themeGroup('brand', 'בהשראת אתרים מוכרים', preferences.theme)}
           <span class="hint">הבחירה נשמרת בדפדפן שלכם ונטענת מיד עם פתיחת האתר.</span>
         </div>
 
@@ -144,6 +180,26 @@ export function openThemeDialog(): void {
             />
             לשמור היסטוריית צפייה במכשיר הזה
           </label>
+        </div>
+
+        <div class="field">
+          <span class="label">${icon('accessibility', { size: 16 })} נגישות</span>
+          <label class="check">
+            <input
+              type="checkbox"
+              data-pref="highContrast"
+              ${preferences.highContrast ? 'checked' : ''}
+            />
+            ניגודיות גבוהה — על גבי כל ערכת נושא
+          </label>
+          <label class="check">
+            <input
+              type="checkbox"
+              data-pref="underlineLinks"
+              ${preferences.underlineLinks ? 'checked' : ''}
+            />
+            קו תחתון קבוע מתחת לקישורים בטקסט
+          </label>
           <label class="check">
             <input
               type="checkbox"
@@ -152,6 +208,18 @@ export function openThemeDialog(): void {
             />
             להפחית אנימציות ומעברים
           </label>
+          <label class="check">
+            <input
+              type="checkbox"
+              data-pref="reduceTransparency"
+              ${preferences.reduceTransparency ? 'checked' : ''}
+            />
+            להפחית שקיפות וטשטוש
+          </label>
+          <span class="hint">
+            הגדרות המערכת שלכם תמיד מתווספות לאלה — אם ביקשתם שם פחות אנימציות, הן יישארו מופחתות גם
+            אם התיבה כאן לא מסומנת.
+          </span>
         </div>
       </div>
     `,
@@ -165,6 +233,9 @@ export function openThemeDialog(): void {
 
   bindRadioGroup(element, '[data-theme-choice]', 'themeChoice', (value) => {
     updatePreferences({ theme: value as ThemeName });
+  });
+  bindRadioGroup(element, '[data-mode]', 'mode', (value) => {
+    updatePreferences({ colorMode: value as ColorMode });
   });
   bindRadioGroup(element, '[data-accent]', 'accent', (value) => {
     updatePreferences({ accent: value as AccentName });

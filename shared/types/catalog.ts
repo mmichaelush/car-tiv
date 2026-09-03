@@ -114,6 +114,13 @@ export interface VideoSummary {
   readonly isFeatured: boolean;
   /** A short slice of the video's tags, for the card footer. */
   readonly tags: readonly string[];
+  /**
+   * The opening of the description, capped in SQL.
+   *
+   * Enough for the list view to fill the space beside the thumbnail on a wide
+   * screen, without a listing response carrying a full description per row.
+   */
+  readonly excerpt: string;
 }
 
 /** The full document behind `/video/:id`. */

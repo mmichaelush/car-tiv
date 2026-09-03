@@ -57,7 +57,7 @@
                   </li>
                   <li class="flex items-center gap-2">
                     <i class="fas fa-circle-check text-purple-600 dark:text-purple-400"></i>
-                    שקיפות לגבי שירותי צד שלישי (YouTube / Google / Netlify)
+                    שקיפות לגבי שירותי צד שלישי (YouTube / Google / Cloudflare)
                   </li>
                 </ul>
               </div>
@@ -149,9 +149,9 @@
                 מידע טכני הנאסף אוטומטית (לוגים ותפעול)
               </h3>
               <p class="mt-2 text-slate-700 dark:text-slate-300 leading-relaxed">
-                פלטפורמת האחסון וההפצה (Netlify) עשויה לאסוף מידע טכני כגון כתובת IP, מזהים מקוונים,
-                סוג דפדפן, מערכת הפעלה, תאריך/שעה ודפים/משאבים שנצפו – למטרות סטטיסטיקה, תפעול
-                ואבטחה.
+                פלטפורמת האחסון וההפצה (Cloudflare) עשויה לאסוף מידע טכני כגון כתובת IP, מזהים
+                מקוונים, סוג דפדפן, מערכת הפעלה, תאריך/שעה ודפים/משאבים שנצפו – למטרות סטטיסטיקה,
+                תפעול ואבטחה.
               </p>
             </div>
 
@@ -266,19 +266,20 @@
                 class="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2"
               >
                 <i class="fas fa-cloud text-purple-600 dark:text-purple-400"></i>
-                Netlify (אחסון והפצה)
+                Cloudflare (אחסון, הפצה ובסיס נתונים)
               </h3>
               <p class="mt-2 text-slate-700 dark:text-slate-300 leading-relaxed">
-                האתר מאוחסן על פלטפורמת Netlify. השירות עשוי לאסוף נתוני תעבורה ואבחון לצורכי תפעול,
-                אבטחה ושיפור השירות.
+                האתר מאוחסן ומוגש על גבי Cloudflare Workers, והנתונים שלו נשמרים ב-Cloudflare D1.
+                השירות עשוי לאסוף נתוני תעבורה ואבחון לצורכי תפעול, אבטחה ושיפור השירות.
               </p>
               <a
-                href="https://www.netlify.com/privacy/"
+                href="https://www.cloudflare.com/privacypolicy/"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="inline-flex items-center gap-2 mt-3 text-sm font-semibold text-purple-700 dark:text-purple-300 hover:underline"
               >
-                מדיניות הפרטיות של Netlify <i class="fas fa-arrow-up-left-from-square text-xs"></i>
+                מדיניות הפרטיות של Cloudflare
+                <i class="fas fa-arrow-up-left-from-square text-xs"></i>
               </a>
             </div>
           </div>

@@ -10,7 +10,17 @@
 
 /* --------------------------------------------------------------- Dialog */
 
+/* Centred, explicitly.
+   A modal <dialog> is centred by the browser's own `margin: auto`, and the
+   reset in base.css — `* { margin: 0 }` — takes it away. So every popup on the
+   site opened against the top edge, off to one side, which is what "the popups
+   aren't centred" meant. `margin: auto` alone re-centres it, but the two inset
+   properties are here as well so the centring does not depend on which of
+   those two rules a future edit happens to touch. */
 .dialog {
+  position: fixed;
+  inset: 0;
+  margin: auto;
   inline-size: min(680px, calc(100vw - 2rem));
   max-block-size: min(88svh, 900px);
   padding: 0;
@@ -393,9 +403,23 @@
    Themes are chosen by looking, not by reading a name. Each swatch paints the
    theme's own background and accent, so the list needs no legend. */
 
+/* A heading over each half of the picker. There are twenty themes now, and an
+   undivided grid of twenty squares is a wall rather than a choice. */
+.theme-picker__group {
+  margin: var(--space-3) 0 var(--space-2);
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.theme-picker__group:first-of-type {
+  margin-block-start: 0;
+}
+
 .theme-picker {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
   gap: var(--space-2);
 }
 

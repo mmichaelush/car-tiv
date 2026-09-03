@@ -230,9 +230,14 @@ export type VideoStatus = (typeof VIDEO_STATUSES)[number];
 export const REPORT_REASONS = [
   'broken',
   'removed',
+  'netfree-blocked',
+  'private',
+  'duplicate',
   'wrong-details',
+  'wrong-vehicle',
   'wrong-category',
   'inaccurate-title',
+  'poor-quality',
   'inappropriate',
   'other',
 ] as const;

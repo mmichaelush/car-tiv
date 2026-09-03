@@ -9,7 +9,13 @@
 
 import { describe, expect, it } from 'vitest';
 import type { VideoSummary, VideoId } from '@shared/types/catalog.js';
-import { emptyState, skeletonGrid, videoCard, videoGrid } from '@src/ui/components/video-card.js';
+import {
+  emptyState,
+  errorState,
+  skeletonGrid,
+  videoCard,
+  videoGrid,
+} from '@src/ui/components/video-card.js';
 import { html, setHtml } from '@src/ui/dom.js';
 
 const video = (overrides: Partial<VideoSummary> = {}): VideoSummary => ({
@@ -25,6 +31,7 @@ const video = (overrides: Partial<VideoSummary> = {}): VideoSummary => ({
   isHebrew: true,
   isFeatured: false,
   tags: ['שמן מנוע'],
+  excerpt: '',
   ...overrides,
 });
 
@@ -91,9 +98,50 @@ describe('videoCard', () => {
     );
   });
 
-  it('flags non-Hebrew content, so a visitor is not surprised', () => {
+  it('does not label non-Hebrew content on the card', () => {
+    // "אנגלית" is a filter concept, not a property of a card. Every card in a
+    // catalog that is mostly Hebrew either carried the badge or did not, which
+    // made it noise rather than information; the Hebrew-only switch in the
+    // filter panel is where that distinction is actually useful.
     const container = render(videoCard(video({ isHebrew: false })));
-    expect(container.textContent).toContain('אנגלית');
+    expect(container.textContent).not.toContain('אנגלית');
+  });
+
+  it('renders the tags the API already sends', () => {
+    // `VideoSummary.tags` is documented as "a short slice of the video's tags,
+    // for the card footer" and the card never rendered it — so the API sent
+    // them on every request and the card threw them away.
+    const container = render(videoCard(video({ tags: ['שמן מנוע', 'טיפול'] })));
+    const tags = [...container.querySelectorAll('.video-card__tags a')];
+
+    expect(tags.map((tag) => tag.textContent?.trim())).toEqual(['שמן מנוע', 'טיפול']);
+  });
+
+  it('links each tag into the filtered listing', () => {
+    const link = render(videoCard(video({ tags: ['שמן מנוע'] }))).querySelector(
+      '.video-card__tags a',
+    );
+    expect(link?.getAttribute('href')).toBe('/search?tags=שמן-מנוע');
+  });
+
+  it('shows at most three tags, because a card is a glance', () => {
+    const many = ['אחד', 'שתיים', 'שלוש', 'ארבע', 'חמש'];
+    const container = render(videoCard(video({ tags: many })));
+    expect(container.querySelectorAll('.video-card__tags a')).toHaveLength(3);
+  });
+
+  it('renders no tag list at all when there are none', () => {
+    const container = render(videoCard(video({ tags: [] })));
+    expect(container.querySelector('.video-card__tags')).toBeNull();
+  });
+
+  it('shows a description only when one is passed', () => {
+    // The listing endpoint does not send descriptions — it would carry 7,876 of
+    // them — so the list view passes it explicitly and the grid does not.
+    expect(render(videoCard(video())).querySelector('.video-card__description')).toBeNull();
+
+    const withText = render(videoCard(video(), { description: 'מדריך מלא להחלפת שמן' }));
+    expect(withText.querySelector('.video-card__description')?.textContent).toContain('מדריך מלא');
   });
 
   it('opens YouTube in a new tab safely', () => {
@@ -157,5 +205,43 @@ describe('videoCard playback controls', () => {
     expect(container.querySelector('[data-action="fullscreen"]')).toBeNull();
     // "Play here" lives on the thumbnail, not in the action row, so it stays.
     expect(container.querySelector('[data-action="play-inline"]')).not.toBeNull();
+  });
+});
+
+describe('empty and error states', () => {
+  it('shows the site’s own subject rather than a magnifying glass', () => {
+    // The most-seen state on a catalog site was the most generic thing on it.
+    const container = render(emptyState({ title: 'לא נמצאו סרטונים' }));
+
+    expect(container.querySelector('.empty-state__art svg')).not.toBeNull();
+    expect(container.querySelector('.empty-state__icon')).toBeNull();
+  });
+
+  it('still uses a small glyph when the caller asks for one', () => {
+    const container = render(emptyState({ title: 'ריק', iconName: 'heart' }));
+
+    expect(container.querySelector('.empty-state__icon svg')).not.toBeNull();
+    expect(container.querySelector('.empty-state__art')).toBeNull();
+  });
+
+  it('draws illustrations from theme tokens, so they work in every theme', () => {
+    // A hex value here would be a colour that survives a theme change, which on
+    // twenty themes in two modes is twenty-nine ways to look wrong.
+    const markup = render(emptyState({ title: 'ריק' })).innerHTML;
+
+    expect(markup).toContain('var(--');
+    expect(markup).not.toMatch(/#[0-9a-f]{3,6}\b/i);
+  });
+
+  it('hides the illustration from assistive technology', () => {
+    // The heading beside it already says what the state is.
+    const svg = render(emptyState({ title: 'ריק' })).querySelector('.empty-state__art svg');
+    expect(svg?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('gives the error state its own picture and a retry', () => {
+    const container = render(errorState());
+    expect(container.querySelector('.empty-state__art svg')).not.toBeNull();
+    expect(container.querySelector('[data-action="retry"]')).not.toBeNull();
   });
 });

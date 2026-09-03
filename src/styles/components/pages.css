@@ -262,17 +262,17 @@
 }
 
 .form-status[data-tone='success'] {
-  background: rgb(52 211 153 / 12%);
+  background: var(--success-soft);
   color: var(--success);
 }
 
 .form-status[data-tone='warning'] {
-  background: rgb(251 191 36 / 12%);
+  background: var(--warning-soft);
   color: var(--warning);
 }
 
 .form-status[data-tone='error'] {
-  background: rgb(251 113 133 / 12%);
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
@@ -322,7 +322,12 @@
   color: var(--text);
 }
 
-.prose a {
+/* Prose links, but not buttons that happen to be links.
+   `.prose a` and `.btn--primary` have identical specificity (0,2,0) and this
+   file loads after controls.css, so the bare selector won — repainting the
+   text of "דברו איתנו" in `--brand`, on a `--brand` background. The label was
+   still there and still clickable; it was the same colour as the button. */
+.prose a:not(.btn) {
   color: var(--brand);
   text-decoration: underline;
   text-underline-offset: 3px;

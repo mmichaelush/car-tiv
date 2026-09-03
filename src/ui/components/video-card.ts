@@ -13,11 +13,13 @@
 
 import { formatDuration } from '@shared/core/duration.js';
 import { formatRelativeDate } from '@shared/core/dates.js';
-import { videoPath } from '@shared/core/paths.js';
+import { ROUTES, videoPath } from '@shared/core/paths.js';
+import { slugify } from '@shared/core/text.js';
 import { thumbnailUrl } from '@shared/core/youtube.js';
 import type { VideoSummary } from '@shared/types/catalog.js';
 import { html, type SafeHtml } from '../dom.js';
 import { icon } from '../icons.js';
+import { illustration } from '../illustrations.js';
 
 export interface CardOptions {
   /** Ids the visitor has favourited, so the heart renders filled. */
@@ -30,7 +32,23 @@ export interface CardOptions {
   readonly thumbnailQuality?: 'medium' | 'high';
   /** Hide the action row entirely — used inside the player sidebar. */
   readonly withActions?: boolean;
+  /**
+   * Override the excerpt the summary carries.
+   *
+   * The card falls back to `VideoSummary.excerpt`, which the listing endpoint
+   * caps in SQL. This exists for the places that already hold the full text —
+   * the video page's own sidebar — so they need not truncate it twice.
+   */
+  readonly description?: string;
 }
+
+/**
+ * Tags shown on a card.
+ *
+ * Three, because a card is a glance. The catalog has videos with a dozen tags
+ * and a card that showed them all would be a tag list with a thumbnail on top.
+ */
+const CARD_TAGS = 3;
 
 /** One card. */
 export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeHtml {
@@ -39,6 +57,7 @@ export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeH
   const isFavorite = options.favorites?.has(video.id) ?? false;
   const isSaved = options.watchLater?.has(video.id) ?? false;
   const progress = options.progress?.get(video.id) ?? 0;
+  const excerpt = (options.description ?? video.excerpt).trim();
 
   return html`
     <article class="video-card" data-video-id="${video.id}">
@@ -102,12 +121,43 @@ export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeH
                 </p>
               `
         }
+        ${
+          // Rendered on every card and shown by CSS only in the list view on a
+          // wide screen, where there is a column of empty space beside the
+          // thumbnail. Doing it in CSS rather than in a branch here means one
+          // card component, and switching view does not re-fetch anything.
+          excerpt.length === 0 ? '' : html`<p class="video-card__description">${excerpt}</p>`
+        }
 
         <div class="video-card__meta">
           <span>${formatRelativeDate(video.addedAt)}</span>
-          ${video.isHebrew ? '' : html`<span class="badge">אנגלית</span>`}
         </div>
 
+        ${
+          // The tags the API already sends. `VideoSummary.tags` is documented as
+          // "a short slice of the video's tags, for the card footer" and the card
+          // simply never rendered it, so every card dropped them — and with the
+          // counters unrefreshed the tag filter looked empty too, which together
+          // read as "tags are broken".
+          //
+          // They are links, not decoration: a tag on a card is the fastest route
+          // into the filtered listing for that tag.
+          video.tags.length === 0
+            ? ''
+            : html`
+                <ul class="video-card__tags" aria-label="תגיות">
+                  ${video.tags.slice(0, CARD_TAGS).map(
+                    (tag) => html`
+                      <li>
+                        <a class="chip chip--tag" href="${ROUTES.search}?tags=${slugify(tag)}"
+                          >${tag}</a
+                        >
+                      </li>
+                    `,
+                  )}
+                </ul>
+              `
+        }
         ${options.withActions === false ? '' : cardActions(video, isFavorite, isSaved)}
       </div>
     </article>
@@ -217,7 +267,19 @@ export interface EmptyStateOptions {
 export function emptyState(options: EmptyStateOptions): SafeHtml {
   return html`
     <div class="empty-state">
-      <span class="empty-state__icon">${icon(options.iconName ?? 'search', { size: 28 })}</span>
+      ${
+        // A car with its bonnet up, rather than a magnifying glass.
+        //
+        // An empty result is the most-seen state on a catalog site and it was
+        // the most generic thing on it. A picture of the site's own subject
+        // says "we looked and there is nothing here" in a way a search glyph
+        // does not, and it reads as the site working rather than as the visitor
+        // having done something wrong. Callers that want the small glyph
+        // instead pass `iconName`.
+        options.iconName == null
+          ? html`<span class="empty-state__art">${illustration('carBonnet', { width: 200 })}</span>`
+          : html`<span class="empty-state__icon">${icon(options.iconName, { size: 28 })}</span>`
+      }
       <h3>${options.title}</h3>
       ${options.description == null ? '' : html`<p>${options.description}</p>`}
       ${
@@ -239,7 +301,7 @@ export function emptyState(options: EmptyStateOptions): SafeHtml {
 export function errorState(message = 'לא הצלחנו לטעון את התוכן'): SafeHtml {
   return html`
     <div class="empty-state">
-      <span class="empty-state__icon">${icon('alert', { size: 28 })}</span>
+      <span class="empty-state__art">${illustration('tools', { width: 168 })}</span>
       <h3>${message}</h3>
       <p>ייתכן שיש בעיית חיבור זמנית.</p>
       <button class="btn btn--primary" type="button" data-action="retry">נסו שוב</button>

@@ -100,11 +100,20 @@ function render(channels: readonly Channel[], meta: PageMeta): void {
               : html`<img src="${channel.imageUrl}" alt="" loading="lazy" width="56" height="56" />`
           }
           <div class="channel-card__body">
+            <!-- One link, stretched over the whole card by the
+                 .channel-card h3 a::after rule, so the card is clickable while
+                 middle-click, "open in new tab" and screen readers still see a
+                 single ordinary link. The channel page it opens lists every
+                 video of theirs. -->
             <h3><a href="${channelPath(channel.slug)}">${channel.name}</a></h3>
             <p>${channel.description}</p>
             <p class="channel-card__meta">
-              ${channel.videoCount == null ? '' : `${formatCount(channel.videoCount)} סרטונים`}
-              ${channel.isFeatured ? html` · <span class="badge badge--brand">מומלץ</span>` : ''}
+              ${
+                // No "מומלץ". Every channel in this catalog is one whose videos
+                // passed the same check, so a badge on some of them says nothing
+                // a visitor can act on — it only implies the others are worse.
+                channel.videoCount == null ? '' : `${formatCount(channel.videoCount)} סרטונים`
+              }
             </p>
           </div>
         </article>

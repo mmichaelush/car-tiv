@@ -1,0 +1,143 @@
+/* ==========================================================================
+   Accessibility
+   --------------------------------------------------------------------------
+   Settings that change how the page reads rather than how it looks, plus the
+   operating-system preferences the page has to honour whether or not anyone
+   visits the settings dialog.
+
+   Every one of these is applied by an attribute on <html>, written by
+   `applyPreferences` and by `public/theme-bootstrap.js` before the first
+   paint. Nothing here needs JavaScript at the moment it is used.
+
+   The rule this file follows: an OS setting can only ever *add* a
+   restriction. Someone whose system asks for reduced motion never gets
+   animation back because a checkbox here is off.
+   ========================================================================== */
+
+/* ------------------------------------------------------------ Contrast
+   Raised contrast on top of whatever theme is chosen.
+
+   Distinct from the `contrast` theme, which is one particular black-and-yellow
+   palette. This is the same intent applied to any family, so someone who needs
+   more contrast does not also have to give up the colours they picked — which
+   is exactly what having only a high-contrast *theme* forced them to do.
+
+   It works on the tokens rather than on components, so it reaches every part
+   of the site including ones written later. */
+:root[data-contrast='high'] {
+  --text-muted: var(--text);
+  --text-subtle: var(--text);
+  --line: var(--line-strong);
+  --brand-soft: transparent;
+  --shadow-color: transparent;
+  --shadow-color-strong: transparent;
+}
+
+:root[data-contrast='high'] .video-card,
+:root[data-contrast='high'] .channel-card,
+:root[data-contrast='high'] .panel,
+:root[data-contrast='high'] .btn {
+  border-width: 2px;
+}
+
+:root[data-contrast='high'] :focus-visible {
+  outline-width: 3px;
+  outline-offset: 2px;
+}
+
+/* The same, asked for by the operating system. `prefers-contrast: more` is a
+   statement about every site, so it applies without the setting. */
+@media (prefers-contrast: more) {
+  :root {
+    --text-muted: var(--text);
+    --line: var(--line-strong);
+  }
+
+  :focus-visible {
+    outline-width: 3px;
+  }
+}
+
+/* Windows High Contrast and other forced-colour modes.
+   The system replaces every colour, so the job here is to stop fighting it:
+   surrender the decorative colours, keep the structure, and make sure borders
+   that were carrying meaning through colour alone are actually drawn. */
+@media (forced-colors: active) {
+  :root {
+    --shadow-color: transparent;
+    --shadow-color-strong: transparent;
+    --brand-soft: transparent;
+    --hero-glow: transparent;
+  }
+
+  .btn,
+  .chip,
+  .video-card,
+  .channel-card,
+  .panel {
+    border: 1px solid;
+  }
+
+  /* Forced colours flatten `aria-pressed` styling, which is how a selected
+     chip or an active toggle is shown. An outline survives. */
+  [aria-pressed='true'],
+  [aria-current='page'] {
+    outline: 2px solid;
+    outline-offset: -2px;
+  }
+
+  .video-card__progress i {
+    forced-color-adjust: none;
+  }
+}
+
+/* -------------------------------------------------------- Underlined links
+   Off by default, because the site distinguishes links by colour and position
+   and an underline under every one is noisy. On for anyone who does not
+   reliably see the colour difference — which is the whole reason it is a
+   setting rather than a decision.
+
+   Scoped to body text: navigation, buttons, chips and cards are not places an
+   underline helps, and underlining a whole card title that is already a link
+   makes the page look broken. */
+:root[data-underline='always'] .prose a,
+:root[data-underline='always'] .video-card__title-link,
+:root[data-underline='always'] p a,
+:root[data-underline='always'] li a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* --------------------------------------------------- Reduced transparency
+   Blur and translucency are hard to read through for some people, and cost
+   real paint time on a weak device. This makes every translucent surface
+   opaque rather than merely less blurred — a half-measure keeps the problem. */
+:root[data-transparency='reduced'] .site-header,
+:root[data-transparency='reduced'] .dialog,
+:root[data-transparency='reduced'] .palette,
+:root[data-transparency='reduced'] .video-card__actions {
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+:root[data-transparency='reduced'] .site-header {
+  background: var(--bg-elevated);
+}
+
+:root[data-transparency='reduced'] .dialog,
+:root[data-transparency='reduced'] .palette {
+  background: var(--surface);
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .site-header,
+  .dialog,
+  .palette {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  .site-header {
+    background: var(--bg-elevated);
+  }
+}

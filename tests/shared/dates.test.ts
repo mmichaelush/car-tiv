@@ -56,13 +56,20 @@ describe('formatRelativeDate', () => {
     expect(formatRelativeDate('2026-08-31T08:00:00Z', now)).toBe('אתמול');
   });
 
-  it('counts days, weeks and months', () => {
+  it('counts days and weeks, while that is genuinely easier to read', () => {
     expect(formatRelativeDate('2026-08-28T12:00:00Z', now)).toBe('לפני 4 ימים');
     expect(formatRelativeDate('2026-08-10T12:00:00Z', now)).toBe('לפני 3 שבועות');
-    expect(formatRelativeDate('2026-05-01T12:00:00Z', now)).toBe('לפני 4 חודשים');
   });
 
-  it('falls back to an absolute date beyond a year', () => {
+  it('gives the real date past a month, not a vague one', () => {
+    // "לפני 4 חודשים" is longer to read than the date, wrong by up to a month,
+    // and in a catalog where most videos are older than that it made nearly
+    // every card say an imprecise thing about a precise fact.
+    expect(formatRelativeDate('2026-05-01T12:00:00Z', now)).toBe('1 במאי 2026');
+    expect(formatRelativeDate('2026-07-15T12:00:00Z', now)).toBe('15 ביולי 2026');
+  });
+
+  it('still gives an absolute date beyond a year', () => {
     expect(formatRelativeDate('2020-01-01T12:00:00Z', now)).toContain('2020');
   });
 });

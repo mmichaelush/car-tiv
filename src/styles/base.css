@@ -128,16 +128,8 @@ p {
    Some people ask their system for more of it. Thicker borders and a heavier
    focus ring cost nothing and are exactly what was requested. */
 
-@media (prefers-contrast: more) {
-  :root {
-    --line: var(--line-strong);
-    --text-muted: var(--text);
-  }
-
-  :focus-visible {
-    outline-width: 3px;
-  }
-}
+/* `prefers-contrast` now lives in accessibility.css beside the site's own
+   contrast setting, so the two cannot drift apart. */
 
 /* --------------------------------------------------------------- Motion
    Two ways to ask for less of it: the operating system setting, and the

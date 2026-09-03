@@ -37,8 +37,18 @@ beforeEach(() => {
 });
 
 describe('defaults', () => {
-  it('starts on the system theme, so a first visit matches the device', () => {
-    expect(readPreferences().theme).toBe('system');
+  it('starts on the site colours, following the device for brightness', () => {
+    // Theme and brightness are separate settings now. There is no `system`
+    // theme any more: `auto` is a *mode*, so a first visit matches the device
+    // without that also deciding which colour family the visitor gets.
+    expect(readPreferences().theme).toBe('purple');
+    expect(readPreferences().colorMode).toBe('auto');
+  });
+
+  it('defaults the accent to the theme, so a brand theme keeps its colour', () => {
+    // Any other default would give someone who picks the YouTube theme a
+    // purple YouTube.
+    expect(readPreferences().accent).toBe('theme');
   });
 
   it('has a default for every option the dialog offers', () => {
@@ -61,18 +71,39 @@ describe('applyPreferences', () => {
     applyPreferences({
       ...DEFAULT_PREFERENCES,
       theme: 'sepia',
+      colorMode: 'dark',
       accent: 'green',
       density: 'compact',
       textSize: 'large',
       reduceMotion: true,
+      highContrast: true,
+      underlineLinks: true,
+      reduceTransparency: true,
     });
 
     const root = document.documentElement;
     expect(root.dataset.theme).toBe('sepia');
+    expect(root.dataset.mode).toBe('dark');
     expect(root.dataset.accent).toBe('green');
     expect(root.dataset.density).toBe('compact');
     expect(root.dataset.textSize).toBe('large');
     expect(root.dataset.motion).toBe('reduced');
+    expect(root.dataset.contrast).toBe('high');
+    expect(root.dataset.underline).toBe('always');
+    expect(root.dataset.transparency).toBe('reduced');
+  });
+
+  it('keeps the theme and the mode independent', () => {
+    // The whole point of the split. Choosing a light page must not discard the
+    // colour family, and choosing a family must not change the brightness —
+    // which is exactly what the old single axis did.
+    applyPreferences({ ...DEFAULT_PREFERENCES, theme: 'ocean', colorMode: 'light' });
+    expect(document.documentElement.dataset.theme).toBe('ocean');
+    expect(document.documentElement.dataset.mode).toBe('light');
+
+    applyPreferences({ ...DEFAULT_PREFERENCES, theme: 'ocean', colorMode: 'dark' });
+    expect(document.documentElement.dataset.theme).toBe('ocean');
+    expect(document.documentElement.dataset.mode).toBe('dark');
   });
 
   it('says "full" rather than removing the attribute when motion is allowed', () => {
@@ -138,22 +169,100 @@ describe('resetPreferences', () => {
 describe('the pre-paint bootstrap', () => {
   const bootstrap = readFileSync('public/theme-bootstrap.js', 'utf8');
 
-  it('sets the same attributes the module does', () => {
-    // The bootstrap runs before the bundle, and duplicates these three lines on
-    // purpose. If the module gains an attribute and the bootstrap does not, the
-    // page flashes the wrong value on every single load.
-    for (const attribute of [
-      'data-theme',
-      'data-accent',
-      'data-density',
-      'data-text-size',
-      'data-motion',
-    ]) {
-      expect(bootstrap).toContain(attribute);
+  it('sets every attribute the module sets', () => {
+    // The bootstrap runs before the bundle and duplicates a few lines of the
+    // module on purpose — importing it would pull the application into the
+    // critical path to set some attributes. The cost of that choice is drift,
+    // and the symptom is a flash of the wrong appearance on every load, which
+    // is easy to miss and hard to attribute.
+    //
+    // Derived from what `applyPreferences` actually writes, not from a list
+    // repeated here: a hardcoded list is the same drift one step removed, and
+    // this test previously named five attributes while the module wrote five —
+    // it would not have noticed the four added since.
+    applyPreferences(DEFAULT_PREFERENCES);
+    const written = [...document.documentElement.attributes]
+      .map((attribute) => attribute.name)
+      .filter((name) => name.startsWith('data-'));
+
+    expect(written.length).toBeGreaterThan(5);
+    for (const attribute of written) {
+      expect(bootstrap, `theme-bootstrap.js must set ${attribute}`).toContain(attribute);
+    }
+  });
+
+  it('translates the same legacy themes', () => {
+    // Both sides have to: the bootstrap runs first, and the module runs on
+    // every read afterwards. If only one migrated, the page would paint one
+    // appearance and then correct itself.
+    for (const legacy of ['system', 'light', 'dark']) {
+      expect(bootstrap, `theme-bootstrap.js must migrate ${legacy}`).toContain(`${legacy}:`);
     }
   });
 
   it('reads the same storage key', () => {
     expect(bootstrap).toContain('cartiv:preferences');
+  });
+});
+
+describe('visitors who chose a theme before light and dark were split out', () => {
+  /**
+   * Light and dark used to be themes rather than a mode, so a returning
+   * visitor has `theme: 'system'` or `theme: 'light'` in their browser. Those
+   * are not valid themes any more. Without a translation they would silently
+   * land back on the default — and someone who had deliberately chosen a light
+   * page would be handed a dark one, which is the most visible way to lose a
+   * setting.
+   */
+  const stored = (data: Record<string, unknown>): void => {
+    window.localStorage.setItem('cartiv:preferences', JSON.stringify({ v: 1, data }));
+  };
+
+  it('turns the old "light" theme into light mode', () => {
+    stored({ theme: 'light' });
+    const preferences = readPreferences();
+
+    expect(preferences.colorMode).toBe('light');
+    expect(THEME_OPTIONS.map((option) => option.value)).toContain(preferences.theme);
+  });
+
+  it('turns the old "system" theme into auto mode', () => {
+    stored({ theme: 'system' });
+    expect(readPreferences().colorMode).toBe('auto');
+  });
+
+  it('keeps a mode the visitor has since chosen explicitly', () => {
+    // They have answered this question more recently with the new control.
+    stored({ theme: 'light', colorMode: 'dark' });
+    expect(readPreferences().colorMode).toBe('dark');
+  });
+
+  it('leaves a theme that is still valid alone', () => {
+    stored({ theme: 'ocean', colorMode: 'light' });
+    const preferences = readPreferences();
+
+    expect(preferences.theme).toBe('ocean');
+    expect(preferences.colorMode).toBe('light');
+  });
+
+  it('never yields a theme the picker cannot show', () => {
+    for (const legacy of ['system', 'light', 'dark']) {
+      stored({ theme: legacy });
+      expect(
+        THEME_OPTIONS.map((option) => option.value),
+        `after migrating ${legacy}`,
+      ).toContain(readPreferences().theme);
+    }
+  });
+});
+
+describe('the navigation rail', () => {
+  it('remembers whether it is collapsed', () => {
+    // A rail that reopened expanded on every page load would be a setting the
+    // visitor has to make again every time, which is worse than not offering it.
+    expect(DEFAULT_PREFERENCES.navCollapsed).toBe(false);
+
+    updatePreferences({ navCollapsed: true });
+    expect(readPreferences().navCollapsed).toBe(true);
   });
 });

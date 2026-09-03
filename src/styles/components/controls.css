@@ -122,10 +122,23 @@
   gap: var(--space-2);
 }
 
+/* A field label, with its icon on the same line.
+   These are `display: block` by default, so an inline SVG inside one sat on
+   its own line above the words — every labelled field in the settings dialog
+   read as a floating glyph with a caption under it. */
 .field > label,
 .label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
   font-size: var(--text-sm);
   font-weight: var(--weight-medium);
+}
+
+.field > label svg,
+.label svg {
+  flex: none;
+  color: var(--text-subtle);
 }
 
 .field .hint {
@@ -325,12 +338,12 @@
 }
 
 .badge--success {
-  background: rgb(52 211 153 / 14%);
+  background: var(--success-soft);
   color: var(--success);
 }
 
 .badge--danger {
-  background: rgb(251 113 133 / 14%);
+  background: var(--danger-soft);
   color: var(--danger);
 }
 
@@ -360,10 +373,29 @@
   color: var(--text);
 }
 
-.segmented button[aria-pressed='true'] {
+.segmented button[aria-pressed='true'],
+.segmented button[aria-checked='true'] {
   background: var(--surface);
   color: var(--brand);
   box-shadow: var(--shadow-sm);
+}
+
+/* A segmented control that fills its field and shows a label beside the icon —
+   for a choice made once, in a settings dialog, rather than a toolbar toggle. */
+.segmented--wide {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  inline-size: 100%;
+}
+
+.segmented--wide button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  block-size: calc(var(--control-height) - 6px);
+  font-size: var(--text-sm);
 }
 
 /* --------------------------------------------------------- Saved searches

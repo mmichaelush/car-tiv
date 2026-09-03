@@ -20,9 +20,16 @@ import { ApiError } from '../../data/http-client.js';
 const REASON_LABELS: Readonly<Record<ReportReason, string>> = {
   broken: 'הסרטון לא נטען או לא עובד',
   removed: 'הסרטון הוסר מ־YouTube',
+  // The report this whole catalog exists to receive: every video here is meant
+  // to be watchable behind the filter, so one that is not should not be here.
+  'netfree-blocked': 'הסרטון חסום ולא נפתח בנטפרי',
+  private: 'הסרטון פרטי או שהצפייה בו מושבתת',
+  duplicate: 'הסרטון כבר קיים במאגר',
   'wrong-details': 'פרטים לא נכונים',
+  'wrong-vehicle': 'היצרן או הדגם לא נכונים',
   'wrong-category': 'הקטגוריה לא מתאימה',
   'inaccurate-title': 'הכותרת לא מדויקת',
+  'poor-quality': 'איכות תמונה או קול ירודה',
   inappropriate: 'תוכן לא מתאים למאגר',
   other: 'משהו אחר',
 };
