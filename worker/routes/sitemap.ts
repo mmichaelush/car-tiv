@@ -57,7 +57,11 @@ async function sitemapPages(context: RequestContext): Promise<Response> {
 
   const [categories, channels] = await Promise.all([
     context.repositories.catalog.listCategories(),
-    context.repositories.catalog.listChannels({ limit: 60, page: 1 }),
+    // Every channel with videos, not one browser page of them. This asked
+    // `listChannels` for 60 and got 60, because that method clamps to
+    // `PAGINATION.maxLimit` — so 356 of the 416 channel pages were never
+    // advertised to a crawler and the sitemap looked entirely healthy.
+    context.repositories.catalog.listChannelSlugs(),
   ]);
 
   const urls = [
@@ -67,7 +71,7 @@ async function sitemapPages(context: RequestContext): Promise<Response> {
       changefreq: 'daily',
       priority: '0.8',
     })),
-    ...channels.items.map((channel) => ({
+    ...channels.map((channel) => ({
       loc: origin + channelPath(channel.slug),
       changefreq: 'weekly',
       priority: '0.6',

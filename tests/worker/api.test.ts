@@ -82,6 +82,36 @@ describe('caching', () => {
 });
 
 describe('GET /api/videos', () => {
+  it('hydrates an explicit list of ids', async () => {
+    // What the offline library and playlists need: a saved set of ids turned
+    // back into cards in one request. `CatalogRepository.getVideosByIds` sent
+    // this parameter at an endpoint that did not read it, so it quietly
+    // returned the newest videos in the catalog instead of the ones asked for
+    // — a wrong answer with a 200 beside it.
+    const all = await api.json<ApiEnvelope<VideoSummary[], PageMeta>>('/api/videos');
+    const wanted = (all.body.data ?? []).slice(0, 3).map((video) => String(video.id));
+    expect(wanted.length).toBe(3);
+
+    const { body } = await api.json<ApiEnvelope<VideoSummary[], PageMeta>>(
+      `/api/videos?ids=${wanted.join(',')}`,
+    );
+
+    expect(body.data?.map((video) => String(video.id)).sort()).toEqual([...wanted].sort());
+    // The total must describe the id list, not the category the counter knows.
+    expect(body.meta?.total).toBe(3);
+  });
+
+  it('ignores an id that is not in the catalog rather than failing', async () => {
+    // A library saved months ago will name videos that have since been hidden
+    // or removed. Those must simply not come back.
+    const { status, body } = await api.json<ApiEnvelope<VideoSummary[], PageMeta>>(
+      '/api/videos?ids=corolla0001,zzzzzzzzzzz',
+    );
+
+    expect(status).toBe(200);
+    expect(body.data).toHaveLength(1);
+  });
+
   it('reads filters from the query string', async () => {
     const { body } = await api.json<ApiEnvelope<VideoSummary[], PageMeta>>(
       '/api/videos?category=maintenance&hebrew=1',

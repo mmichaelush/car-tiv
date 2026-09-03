@@ -43,7 +43,7 @@ INSERT OR IGNORE INTO home_sections (id, title, subtitle, type, filter_json, ite
   ('maintenance',       'טיפולים',           'תחזוקה שוטפת ומניעתית',           'category',          '{"category":"maintenance"}', 8, '/category/maintenance', 50, 0),
   ('diy',               'עשה זאת בעצמך',     'מדריכי תיקונים צעד אחר צעד',      'category',          '{"category":"diy"}',         8, '/category/diy',         60, 0),
   ('review',            'סקירות חדשות',      'מבחני דרך והשוואות',              'category',          '{"category":"review"}',      8, '/category/review',      70, 0),
-  ('popular',           'הנצפים ביותר',      'מה שאחרים צופים בו עכשיו',        'popular',           '{}',                        8,  NULL,                   80, 0);
+  ('popular',           'מהארכיון',          'סרטונים ותיקים שכדאי לגלות מחדש',  'recent',            '{"sort":"date-asc"}',      8,  '/search?sort=date-asc', 80, 0);
 
 -- --------------------------------------------------------------------------
 -- Feature flags. Environment variables in wrangler.jsonc take precedence;

@@ -160,6 +160,15 @@ export interface VideoQuery {
   readonly category: CategoryId;
   readonly channel: ChannelSlug | null;
   readonly tags: readonly TagSlug[];
+  /**
+   * Hydrate exactly these video ids, in the order the catalog returns them.
+   *
+   * Not a filter in the browsing sense — it is how a saved list (the offline
+   * library, a playlist, a share) turns a set of ids back into cards in one
+   * request instead of one request per id. Bounded by `PAGINATION.maxLimit`
+   * like any other page, so it cannot be used to ask for the whole catalog.
+   */
+  readonly ids: readonly string[];
   readonly manufacturer: string | null;
   readonly model: string | null;
   readonly year: number | null;

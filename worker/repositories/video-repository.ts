@@ -557,6 +557,13 @@ export class VideoRepository extends BaseRepository {
     // index seek into `idx_video_tags_tag` — so it reads that tag's videos and
     // nothing else: 0.07 ms for the rare tag, and a worst case of 5.2 ms on the
     // most common one. Better where it matters, and a better ceiling.
+    // An explicit id list — the offline library and playlists hydrating a saved
+    // set in one request. Bounded by `PAGINATION.maxLimit` in `parseQuery`, so
+    // this can never approach D1's 100-parameter ceiling.
+    if (query.ids.length > 0) {
+      conditions.add(`v.id IN (${placeholders(query.ids.length)})`, ...query.ids);
+    }
+
     for (const tag of query.tags) {
       conditions.add(
         `v.id IN (SELECT vt.video_id FROM video_tags vt
@@ -616,6 +623,9 @@ function isCountableByCounter(query: VideoQuery): boolean {
   return (
     query.q.trim().length < SEARCH.minQueryLength &&
     query.tags.length <= 1 &&
+    // An id list is a set of exactly known size, so the maintained counter for
+    // the category would be the wrong number entirely.
+    query.ids.length === 0 &&
     query.channel == null &&
     query.manufacturer == null &&
     query.model == null &&

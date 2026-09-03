@@ -20,6 +20,7 @@ export const EMPTY_QUERY: VideoQuery = {
   category: 'all',
   channel: null,
   tags: [],
+  ids: [],
   manufacturer: null,
   model: null,
   year: null,
@@ -58,6 +59,7 @@ export function parseQuery(params: URLSearchParams, base: Partial<VideoQuery> = 
     category: text('category') ?? base.category ?? 'all',
     channel: text('channel') ?? base.channel ?? null,
     tags: parseList(params, 'tags', base.tags ?? []),
+    ids: parseList(params, 'ids', base.ids ?? []).slice(0, PAGINATION.maxLimit),
     manufacturer: text('manufacturer') ?? base.manufacturer ?? null,
     model: text('model') ?? base.model ?? null,
     year: number('year') ?? base.year ?? null,
@@ -83,6 +85,7 @@ export function serializeQuery(query: VideoQuery): URLSearchParams {
   if (query.category !== 'all') params.set('category', query.category);
   if (query.channel != null) params.set('channel', query.channel);
   if (query.tags.length > 0) params.set('tags', [...query.tags].join(','));
+  if (query.ids.length > 0) params.set('ids', [...query.ids].join(','));
   if (query.manufacturer != null) params.set('manufacturer', query.manufacturer);
   if (query.model != null) params.set('model', query.model);
   if (query.year != null) params.set('year', String(query.year));
@@ -140,6 +143,6 @@ function parseBoolean(value: string | null): boolean | null {
   return value === '1' || value === 'true' || value === 'yes';
 }
 
-function isSortOption(value: string | null): value is SortOption {
+export function isSortOption(value: string | null): value is SortOption {
   return value != null && (SORT_OPTIONS as readonly string[]).includes(value);
 }

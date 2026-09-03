@@ -159,6 +159,35 @@ export class CatalogRepository extends BaseRepository {
     return { items: rows.map(toChannel), meta: buildPageMeta(page, limit, total) };
   }
 
+  /**
+   * Every channel that has a page worth crawling — slug and video count only.
+   *
+   * Separate from `listChannels` because that method is paginated for a
+   * *browser*: `clampLimit` caps it at `PAGINATION.maxLimit`, which is 60. The
+   * sitemap asked it for 60 and got 60, so 356 of the site's 416 channel pages
+   * were never advertised to a search engine — silently, because 60 rows is a
+   * successful response.
+   *
+   * `featuredOnly` deliberately plays no part here. That flag records whether a
+   * channel's *YouTube* page opens behind the NetFree filter, which is a fact
+   * about YouTube; the channel page on this site works for every channel, and
+   * is exactly the page a crawler should have.
+   *
+   * A channel with no published videos is excluded: its page is an empty state,
+   * and a sitemap full of empty pages is how a site teaches a crawler to trust
+   * it less.
+   */
+  async listChannelSlugs(limit = 5_000): Promise<{ slug: string; videoCount: number }[]> {
+    return this.all<{ slug: string; videoCount: number }>(
+      `SELECT slug, video_count AS videoCount
+       FROM channels
+       WHERE is_visible = 1 AND video_count > 0
+       ORDER BY video_count DESC, name
+       LIMIT ?`,
+      [limit],
+    );
+  }
+
   /** One channel by slug. */
   async findChannel(slug: string): Promise<Channel | null> {
     const row = await this.first<ChannelRow>(

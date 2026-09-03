@@ -171,7 +171,7 @@ function renderRail(options: ShellOptions): void {
                   <div class="suggestions" data-suggestions hidden></div>
                 </div>
               </form>
-              <a class="site-rail__search-icon" href="${ROUTES.search}" aria-label="חיפוש">
+              <a class="site-rail__search-icon" href="${ROUTES.search}" aria-label="חיפוש" title="חיפוש">
                 <span class="site-rail__icon">${icon('search', { size: 20 })}</span>
               </a>
             `
@@ -185,8 +185,18 @@ function renderRail(options: ShellOptions): void {
               ${group.items.map(
                 (item) => html`
                   <li>
+                    <!--
+                      An accessible name as well as the visible text: collapsed,
+                      the label span is display:none, which removes it from the
+                      accessibility tree too, so without aria-label the whole
+                      navigation reads as a column of unnamed links. The title
+                      does the same job for a mouse. Both repeat the visible
+                      text, so nothing changes while the rail is expanded.
+                    -->
                     <a
                       href="${item.href}"
+                      aria-label="${item.label}"
+                      title="${item.label}"
                       ${options.active === item.key ? 'aria-current="page"' : ''}
                     >
                       <span class="site-rail__icon">${icon(item.iconName, { size: 20 })}</span>
@@ -203,15 +213,15 @@ function renderRail(options: ShellOptions): void {
       <div class="site-rail__tools">
         <!-- Filled in by the account feature once the session resolves. -->
         <div class="account-slot" data-account-slot></div>
-        <button type="button" data-open-palette title="חיפוש מהיר (Ctrl+K)">
+        <button type="button" data-open-palette aria-label="חיפוש מהיר" title="חיפוש מהיר (Ctrl+K)">
           <span class="site-rail__icon">${icon('command', { size: 20 })}</span>
           <span class="site-rail__label">חיפוש מהיר</span>
         </button>
-        <button type="button" data-open-library title="הספרייה שלי">
+        <button type="button" data-open-library aria-label="שמורים" title="הספרייה שלי">
           <span class="site-rail__icon">${icon('bookmark', { size: 20 })}</span>
           <span class="site-rail__label">שמורים</span>
         </button>
-        <button type="button" data-open-theme title="עיצוב והעדפות">
+        <button type="button" data-open-theme aria-label="עיצוב והעדפות" title="עיצוב והעדפות">
           <span class="site-rail__icon">${icon('settings', { size: 20 })}</span>
           <span class="site-rail__label">עיצוב והעדפות</span>
         </button>
@@ -263,11 +273,45 @@ function applyRailState(collapsed: boolean): void {
 
 /** Open and close the drawer, and collapse and expand the rail. */
 function bindRail(scrim: HTMLElement): void {
+  const rail = document.querySelector<HTMLElement>('[data-site-rail]');
+
+  /**
+   * Focus, while the drawer is open.
+   *
+   * On a phone the drawer covers the page, but the page underneath is still in
+   * the tab order — so tabbing walked straight out of the open drawer into
+   * links nobody could see, and a screen reader read the whole hidden page.
+   * `inert` is the one-property answer: it removes a subtree from the tab order
+   * and from the accessibility tree at once, and every browser this site
+   * targets supports it.
+   *
+   * The rail is a sibling of `<main>`, so making the drawer modal is a matter
+   * of marking everything *but* the rail and the scrim inert.
+   */
+  const setPageInert = (inert: boolean): void => {
+    for (const element of document.body.children) {
+      if (!(element instanceof HTMLElement)) continue;
+      if (element === rail || element === scrim) continue;
+      element.inert = inert;
+    }
+  };
+
+  /** What the drawer was opened from, so closing puts focus back on it. */
+  let opener: HTMLElement | null = null;
+
   const closeDrawer = (): void => {
+    const wasOpen = document.documentElement.getAttribute('data-rail-open') != null;
     document.documentElement.removeAttribute('data-rail-open');
     scrim.hidden = true;
+    setPageInert(false);
     const toggle = document.querySelector('[data-menu-toggle]');
     toggle?.setAttribute('aria-expanded', 'false');
+
+    // Only when it really was open: this runs on every Escape and every click
+    // on a rail link, and stealing focus back to the menu button after an
+    // ordinary click would be worse than doing nothing.
+    if (wasOpen && opener != null && document.contains(opener)) opener.focus();
+    opener = null;
   };
 
   on(document, 'click', (event) => {
@@ -279,8 +323,12 @@ function bindRail(scrim: HTMLElement): void {
       // its own control on a desktop, so this only ever opens the drawer.
       const open = document.documentElement.getAttribute('data-rail-open') == null;
       if (open) {
+        opener = target.closest<HTMLElement>('[data-menu-toggle]');
         document.documentElement.setAttribute('data-rail-open', '');
         scrim.hidden = false;
+        setPageInert(true);
+        // Into the drawer, not left behind on a button the drawer now covers.
+        rail?.querySelector<HTMLElement>('a, button, input')?.focus();
       } else {
         closeDrawer();
       }

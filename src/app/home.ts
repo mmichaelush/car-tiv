@@ -7,6 +7,7 @@
  * the visitor's own device rather than from the server.
  */
 
+import { EMPTY_QUERY } from '@shared/core/query.js';
 import { channelPath } from '@shared/core/paths.js';
 import type { Category, Channel, HomeSection, VideoSummary } from '@shared/types/catalog.js';
 import { startPage } from './bootstrap.js';
@@ -111,7 +112,9 @@ async function buildPersonalSections(): Promise<Map<string, VideoSummary[]>> {
   if (vehicle != null) {
     try {
       const page = await catalog.listVideos({
-        ...emptyQuery(),
+        // `EMPTY_QUERY`, not a hand-written copy of the defaults: a local one
+        // silently stops matching `VideoQuery` every time a filter is added.
+        ...EMPTY_QUERY,
         manufacturer: vehicle.manufacturer,
         model: vehicle.model,
         limit: 12,
@@ -179,22 +182,3 @@ function renderChannels(channels: readonly Channel[]): void {
   channelCarousel.refresh();
 }
 
-/** A blank query object, so the personal row does not repeat every default. */
-function emptyQuery() {
-  return {
-    q: '',
-    category: 'all',
-    channel: null,
-    tags: [] as string[],
-    manufacturer: null as string | null,
-    model: null as string | null,
-    year: null as number | null,
-    hebrewOnly: false,
-    featuredOnly: false,
-    minDurationSeconds: null as number | null,
-    maxDurationSeconds: null as number | null,
-    sort: 'date-desc' as const,
-    page: 1,
-    limit: 12,
-  };
-}

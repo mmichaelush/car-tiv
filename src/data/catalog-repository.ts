@@ -7,6 +7,7 @@
  * writing another class with these methods — no page changes.
  */
 
+import { PAGINATION } from '@shared/constants.js';
 import { serializeQuery } from '@shared/core/query.js';
 import type { PagedResult } from './http-client.js';
 import { httpClient, type HttpClient } from './http-client.js';
@@ -91,11 +92,31 @@ export class CatalogRepository {
     return this.#http.get<VideoSummary[]>(`/videos/${encodeURIComponent(id)}/related`, { signal });
   }
 
-  getVideosByIds(ids: readonly string[], signal?: AbortSignal): Promise<readonly VideoSummary[]> {
-    if (ids.length === 0) return Promise.resolve([]);
-    return this.#http
-      .getPage<VideoSummary>('/videos', { params: { ids: ids.join(',') }, signal })
-      .then((page) => page.items);
+  /**
+   * Hydrate a saved list of ids into cards, in one request.
+   *
+   * This sent `?ids=` at a listing endpoint that did not read the parameter, so
+   * it silently returned the newest videos in the catalog instead of the ones
+   * asked for — a wrong answer with a 200 next to it, which is the worst kind.
+   * `/api/videos` now understands `ids`; the ordering is restored here because
+   * the database returns the set in *its* order, and a library or a playlist is
+   * a list the person arranged.
+   */
+  async getVideosByIds(
+    ids: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<readonly VideoSummary[]> {
+    if (ids.length === 0) return [];
+
+    const page = await this.#http.getPage<VideoSummary>('/videos', {
+      params: { ids: ids.join(','), limit: String(Math.min(ids.length, PAGINATION.maxLimit)) },
+      signal,
+    });
+
+    const found = new Map(page.items.map((video) => [String(video.id), video]));
+    // Ids the catalog no longer has — deleted, or hidden since the list was
+    // saved — simply do not appear, rather than becoming holes in the row.
+    return ids.map((id) => found.get(id)).filter((video): video is VideoSummary => video != null);
   }
 
   videoExists(value: string, signal?: AbortSignal): Promise<VideoExistence> {

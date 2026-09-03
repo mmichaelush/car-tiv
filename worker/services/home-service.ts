@@ -7,7 +7,7 @@
  * rather than failing the whole page.
  */
 
-import { EMPTY_QUERY } from '@shared/core/query.js';
+import { EMPTY_QUERY, isSortOption } from '@shared/core/query.js';
 import { categoryPath } from '@shared/core/paths.js';
 import type { CatalogStats, HomeSection, VideoQuery } from '@shared/types/catalog.js';
 import type { HomeSectionRow } from '../repositories/catalog-repository.js';
@@ -97,17 +97,32 @@ export class HomeService {
     const overrides = parseFilter(row.filterJson);
     const base: VideoQuery = { ...EMPTY_QUERY, ...overrides, page: 1, limit: row.itemLimit };
 
+    // A sort written into the section's own `filter_json` wins.
+    //
+    // Every branch below used to end in `sort: 'date-desc'`, which quietly
+    // discarded a sort an editor had configured — so a section could be set up
+    // to show the archive and would show the newest videos instead, with no
+    // error anywhere. The type decides the *filter*; the sort is a setting.
+    const configured = overrides.sort;
+    const sort = configured != null && isSortOption(configured) ? configured : 'date-desc';
+
     switch (row.type) {
       case 'featured':
-        // Curated rows: only what an editor marked, newest first.
-        return { ...base, featuredOnly: true, sort: 'date-desc' };
+        // Curated rows: only what an editor marked.
+        return { ...base, featuredOnly: true, sort };
       case 'popular':
       case 'trending':
-        // Until view counts are collected, "popular" falls back to newest.
-        return { ...base, sort: 'date-desc' };
+        // Kept, and honest about being unimplemented: nothing writes
+        // `video_stats.view_count`, because a view counter is a D1 write on the
+        // busiest route on the site and the free plan's write budget is the same
+        // size as its request budget. A section of this type therefore behaves
+        // as its configured sort, and no seeded section uses it — see
+        // `migrations/0013`. The day there is a view count worth ordering by,
+        // this is where it goes.
+        return { ...base, sort };
       case 'recent':
       default:
-        return { ...base, sort: 'date-desc' };
+        return { ...base, sort };
     }
   }
 }

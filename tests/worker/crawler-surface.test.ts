@@ -97,6 +97,32 @@ describe('the sitemap a crawler is handed', () => {
     }
   });
 
+  it('lists every channel that has a page, not one browser page of them', async () => {
+    // `sitemapPages` asked `listChannels` for 60 and got 60, because that
+    // method clamps to `PAGINATION.maxLimit` — so on the real catalog 356 of
+    // 416 channel pages were never advertised, and the sitemap looked perfectly
+    // healthy while doing it. The fixture is small, so this asserts the
+    // relationship rather than a number: every channel with videos appears.
+    const body = await (await api.fetch('/sitemap-pages.xml')).text();
+
+    const expected = db.queryRaw<{ slug: string }>(
+      `SELECT slug FROM channels WHERE is_visible = 1 AND video_count > 0`,
+    );
+    expect(expected.length).toBeGreaterThan(0);
+    for (const channel of expected) {
+      expect(body, channel.slug).toContain(`/channel/${channel.slug}`);
+    }
+  });
+
+  it('does not advertise a channel page that would be empty', async () => {
+    // A sitemap full of empty pages is how a site teaches a crawler to trust
+    // it less, so a channel with nothing published is left out.
+    db.runRaw(`INSERT INTO channels (slug, name, is_visible, video_count) VALUES ('quiet', 'ערוץ ריק', 1, 0)`);
+    const body = await (await api.fetch('/sitemap-pages.xml')).text();
+
+    expect(body).not.toContain('/channel/quiet');
+  });
+
   it('advertises URLs on the configured origin', async () => {
     const other = createTestWorker(db, { APP_URL: 'https://example.test' });
     const index = await (await other.fetch('/sitemap.xml')).text();
