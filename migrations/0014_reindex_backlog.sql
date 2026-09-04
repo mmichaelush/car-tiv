@@ -1,0 +1,42 @@
+-- A video whose search index write failed must not stay unfindable forever.
+--
+-- ## The gap
+--
+-- `ImportRepository.importBatch` was made atomic in an earlier round: the video
+-- rows, their tags and the job's `last_row_number` all land in one D1 batch, so
+-- a failure rolls the whole batch back. Good — but the search index is written
+-- *after* that batch commits, deliberately, because rolling back a correct
+-- import because the index write failed would be the worse of the two outcomes.
+--
+-- The consequence was not thought through. If `reindex()` fails, the high-water
+-- mark has already advanced, so the client's retry of that batch is dropped as
+-- "already imported" and nothing ever rebuilds those documents. The videos are
+-- in the catalog, visible on every listing, and invisible to search — for good.
+-- The comment claiming "the next batch repairs it" was wrong: the next batch
+-- indexes its own rows and nothing else.
+--
+-- The same hole exists on every admin write. `reindex()` is called after the
+-- update, and a failure there leaves the index describing the old title with
+-- nothing to notice it.
+--
+-- ## The flag
+--
+-- One column. A write that changes indexed text sets `needs_reindex = 1` in the
+-- *same* batch as the change, so the intent to index is as durable as the change
+-- itself; a successful reindex clears it. Anything left set is a backlog, and
+-- the hourly maintenance run drains it.
+--
+-- Partial index: only the rows that need work are in it, so "what is
+-- outstanding?" is an index seek over a table that is almost always empty
+-- rather than a scan of 7,876 videos. On a plan metered by rows read, a cron
+-- that asks a question every hour must not pay for the whole table to hear
+-- "nothing".
+--
+-- Existing rows default to 0 rather than 1: the catalog in the database was
+-- indexed by the import that created it, and marking all 7,876 as outstanding
+-- would make the first cron run after this migration do a full rebuild for no
+-- reason.
+
+ALTER TABLE videos ADD COLUMN needs_reindex INTEGER NOT NULL DEFAULT 0;
+
+CREATE INDEX idx_videos_needs_reindex ON videos (id) WHERE needs_reindex = 1;

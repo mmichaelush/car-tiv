@@ -45,10 +45,17 @@ export interface CardOptions {
 /**
  * Tags shown on a card.
  *
- * Three, because a card is a glance. The catalog has videos with a dozen tags
- * and a card that showed them all would be a tag list with a thumbnail on top.
+ * Six, over two rows. It was three over one row, and one row is too few: a
+ * Hebrew tag is a whole word, so two long ones fill a card's width and the
+ * third is cut off — the row read as "there is one more tag" when there were
+ * often eight, and the tags are the fastest route into a filtered listing.
+ *
+ * Still bounded, because a card is a glance. The catalog has videos with a
+ * dozen tags, and a card that showed them all would be a tag list with a
+ * thumbnail on top. `--card-tag-rows` in `cards.css` is what actually clips it;
+ * this number only decides how many are available to fill those rows.
  */
-const CARD_TAGS = 3;
+const CARD_TAGS = 6;
 
 /** One card. */
 export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeHtml {

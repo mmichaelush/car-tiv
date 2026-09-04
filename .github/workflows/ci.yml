@@ -36,3 +36,27 @@ jobs:
       # Proves the legal pages still build from source and the site compiles.
       - name: Build
         run: npm run build
+
+      # The two checks that need a real browser, and therefore cannot be unit
+      # tests: happy-dom does not do layout and Node does not resolve
+      # `light-dark()`. Both were written after a bug that had survived a full
+      # visual review — a 27px horizontal scroll on every page, and two themes
+      # failing WCAG contrast — so leaving them out of CI would mean they only
+      # ever run when someone remembers.
+      #
+      # `playwright-core` ships no browsers on purpose (see the note in
+      # `scripts/check-contrast.ts`), so the runner's own Chrome is used. Both
+      # scripts honour `CHROMIUM_PATH`.
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
+        id: chrome
+
+      - name: Contrast
+        run: npm run check:contrast
+        env:
+          CHROMIUM_PATH: ${{ steps.chrome.outputs.chrome-path }}
+
+      - name: Layout
+        run: npm run check:layout
+        env:
+          CHROMIUM_PATH: ${{ steps.chrome.outputs.chrome-path }}

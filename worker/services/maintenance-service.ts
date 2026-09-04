@@ -38,6 +38,7 @@ import type { Env } from '../env.js';
 import type { Logger } from '../lib/logger.js';
 import type { MaintenanceRepository } from '../repositories/maintenance-repository.js';
 import type { CountersRepository } from '../repositories/counters-repository.js';
+import type { SearchIndexRepository } from '../repositories/search-index-repository.js';
 
 /**
  * How many videos one run checks.
@@ -47,6 +48,18 @@ import type { CountersRepository } from '../repositories/counters-repository.js'
  * revisited about every two days.
  */
 export const LINK_CHECK_BATCH = 200;
+
+/**
+ * How many outstanding videos one maintenance run reindexes.
+ *
+ * The reindex is the most statement-hungry write in the code base, and this run
+ * shares one Worker invocation — fifty D1 queries — with the link check, the
+ * counter refresh, the retention pass and the growth sample. Fifty videos costs
+ * about a dozen statements, which fits alongside all of them. A larger backlog
+ * drains an hour at a time, and that is the right speed for a condition that
+ * should never arise in the first place.
+ */
+export const REINDEX_BACKLOG = 50;
 
 /** Requests in flight at once. Politeness, and a bound on memory. */
 const CONCURRENCY = 8;
@@ -63,17 +76,26 @@ export interface MaintenanceReport {
   readonly rowsPruned: number;
   /** Rows whose maintained counters were recomputed. */
   readonly countersRefreshed: number;
+  /** Videos whose search index was rebuilt from the backlog. */
+  readonly reindexed: number;
   readonly durationMs: number;
 }
 
 export class MaintenanceService {
   readonly #repository: MaintenanceRepository;
   readonly #counters: CountersRepository;
+  readonly #search: SearchIndexRepository;
   readonly #logger: Logger;
 
-  constructor(repository: MaintenanceRepository, counters: CountersRepository, logger: Logger) {
+  constructor(
+    repository: MaintenanceRepository,
+    counters: CountersRepository,
+    search: SearchIndexRepository,
+    logger: Logger,
+  ) {
     this.#repository = repository;
     this.#counters = counters;
+    this.#search = search;
     this.#logger = logger;
   }
 
@@ -101,6 +123,11 @@ export class MaintenanceService {
       return { sessions: 0, rateLimits: 0 };
     });
 
+    const reindexed = await this.#drainReindexBacklog().catch((cause: unknown) => {
+      this.#logger.warn('Reindex backlog failed', { error: describe(cause) });
+      return 0;
+    });
+
     await this.#counters.sampleGrowth().catch((cause: unknown) => {
       this.#logger.warn('Growth sampling failed', { error: describe(cause) });
     });
@@ -114,6 +141,7 @@ export class MaintenanceService {
         counters == null
           ? 0
           : counters.categories + counters.channels + counters.tags + counters.categoryTagPairs,
+      reindexed,
       durationMs: Date.now() - started,
     };
 
@@ -166,6 +194,31 @@ export class MaintenanceService {
     // Reporting the batch size meant a run where all 200 timed out still said
     // "checked 200", which is the opposite of what the dashboard is for.
     return { checked: alive.length + broken.length, broken: broken.length, recovered };
+  }
+
+  /**
+   * Rebuild the search index for videos whose reindex never succeeded.
+   *
+   * Every write that changes indexed text sets `needs_reindex = 1` in the same
+   * transaction as the change; a successful reindex clears it. Anything still
+   * set is a video that is in the catalog and missing from search — visible on
+   * every listing, unfindable by typing its name — and before this ran, that
+   * was permanent: an import advances its own high-water mark inside the
+   * committed batch, so the client's retry is dropped as "already imported" and
+   * nothing ever tries again.
+   *
+   * `REINDEX_BACKLOG` at a time, not everything outstanding. The reindex is the
+   * most statement-hungry write in the code base and this shares one Worker
+   * invocation with the link check, the counter refresh and the retention pass;
+   * a backlog larger than one slice is drained an hour at a time, which is the
+   * right speed for a condition that should never occur.
+   */
+  async #drainReindexBacklog(): Promise<number> {
+    const outstanding = await this.#search.backlog(REINDEX_BACKLOG);
+    if (outstanding.length === 0) return 0;
+
+    this.#logger.warn('Reindex backlog found', { count: outstanding.length });
+    return this.#search.reindex(outstanding);
   }
 
   async #housekeeping(): Promise<{ sessions: number; rateLimits: number }> {

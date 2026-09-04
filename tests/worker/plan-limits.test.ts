@@ -34,6 +34,7 @@ import { SearchIndexRepository } from '@worker/repositories/search-index-reposit
 import { VideoRepository } from '@worker/repositories/video-repository.js';
 import type { VideoId } from '@shared/types/catalog.js';
 import { MaintenanceService, LINK_CHECK_BATCH } from '@worker/services/maintenance-service.js';
+import type { Logger } from '@worker/lib/logger.js';
 import {
   MAX_BOUND_PARAMETERS,
   MAX_LIKE_PATTERN_BYTES,
@@ -41,7 +42,8 @@ import {
 } from '@worker/repositories/base.js';
 import { CatalogRepository } from '@worker/repositories/catalog-repository.js';
 import { SearchRepository } from '@worker/repositories/search-repository.js';
-import { SEARCH } from '@shared/constants.js';
+import { PAGINATION, SEARCH, TAGS } from '@shared/constants.js';
+import { parseQuery } from '@shared/core/query.js';
 import { MAX_BULK_IDS, PLAN_LIMITS } from '@shared/constants.js';
 import { idsSchema } from '@worker/routes/admin-routes.js';
 import { IMPORT_BATCH_SIZE } from '@worker/routes/import-routes.js';
@@ -86,7 +88,7 @@ const silentLogger = {
   warn: () => undefined,
   error: () => undefined,
   child: () => silentLogger,
-} as unknown as ConstructorParameters<typeof MaintenanceService>[2];
+} as unknown as Logger;
 
 const env = { ENVIRONMENT: 'test', APP_URL: 'https://car-tiv.test' } as unknown as Env;
 
@@ -119,6 +121,7 @@ describe('no statement exceeds D1s bound-parameter limit', () => {
     const service = new MaintenanceService(
       new MaintenanceRepository(db),
       new CountersRepository(db),
+      new SearchIndexRepository(db),
       silentLogger,
     );
 
@@ -330,6 +333,7 @@ describe('one maintenance run stays inside a Worker invocation', () => {
     const service = new MaintenanceService(
       new MaintenanceRepository(db),
       new CountersRepository(db),
+      new SearchIndexRepository(db),
       silentLogger,
     );
 
@@ -344,6 +348,42 @@ describe('one maintenance run stays inside a Worker invocation', () => {
 // ---------------------------------------------------------------------------
 // The 50-queries-per-invocation limit, on the write paths
 // ---------------------------------------------------------------------------
+
+describe('a public URL cannot blow past the bound-parameter limit', () => {
+  /**
+   * Every *write* in `worker/repositories` chunks for D1's 100-parameter limit.
+   * `?tags=` is the one **read** path where the list comes straight from a
+   * visitor: each selected tag becomes its own subquery with its own binding, so
+   * a long enough query string turned a public, unauthenticated URL into a 503
+   * anyone could trigger by typing. `parseQuery` caps it at `TAGS.maxSelected`.
+   */
+  it('survives two hundred tags in the query string', async () => {
+    const many = Array.from({ length: 200 }, (_, index) => `tag-${String(index)}`).join(',');
+    const query = parseQuery(new URLSearchParams(`tags=${many}`));
+
+    expect(query.tags).toHaveLength(TAGS.maxSelected);
+    // The real query, on the real adapter, which throws above 100 bindings.
+    await expect(new VideoRepository(db).list(query)).resolves.toBeDefined();
+  });
+
+  it('keeps the tags a person can actually pick', async () => {
+    const query = parseQuery(new URLSearchParams('tags=בלמים,מזגן,שמן'));
+    expect(query.tags).toEqual(['בלמים', 'מזגן', 'שמן']);
+    await expect(new VideoRepository(db).list(query)).resolves.toBeDefined();
+  });
+
+  it('the same for an over-long id list', async () => {
+    // `ids` is capped at the page limit for the same reason.
+    const many = Array.from(
+      { length: 300 },
+      (_, index) => `vid${String(index).padStart(8, '0')}`,
+    ).join(',');
+    const query = parseQuery(new URLSearchParams(`ids=${many}`));
+
+    expect(query.ids.length).toBeLessThanOrEqual(PAGINATION.maxLimit);
+    await expect(new VideoRepository(db).list(query)).resolves.toBeDefined();
+  });
+});
 
 describe('an admin or import request stays inside one Worker invocation', () => {
   /**
@@ -507,6 +547,90 @@ describe('an admin or import request stays inside one Worker invocation', () => 
     });
 
     expect((await imports.findJob(jobId))!.importedRows).toBe(1);
+  });
+
+  it('a restore puts a video back exactly as it was, not published', async () => {
+    // `softDelete` wrote `status = 'removed'` and `restore` wrote
+    // `status = 'published'`, so delete-then-restore *published* a video that
+    // had never been published: a hidden video an editor took down, a pending
+    // submission nobody approved, a broken link. Undo is only allowed to be the
+    // inverse of the thing it undoes.
+    const ids = seedManyVideos(4);
+    const admin = new AdminRepository(db);
+
+    const statuses = ['draft', 'pending', 'hidden', 'broken'] as const;
+    for (const [index, status] of statuses.entries()) {
+      db.runRaw(`UPDATE videos SET status = ? WHERE id = ?`, status, ids[index] ?? '');
+    }
+
+    await admin.softDelete(ids, null);
+    await admin.restore(ids, null);
+
+    const after = db.queryRaw<{ id: string; status: string; deleted_at: string | null }>(
+      `SELECT id, status, deleted_at FROM videos WHERE id LIKE 'bulk%' ORDER BY id`,
+    );
+    expect(after.map((row) => row.status)).toEqual([...statuses]);
+    expect(after.every((row) => row.deleted_at == null)).toBe(true);
+  });
+
+  it('a failed reindex leaves a backlog the cron can drain', async () => {
+    // The gap this closes: the import batch is atomic and advances its own
+    // high-water mark, and the reindex runs *after* it commits. If the reindex
+    // failed, the client's retry was dropped as "already imported" and those
+    // videos stayed in the catalog and permanently out of search. The comment
+    // claiming the next batch would repair it was wrong — the next batch
+    // indexes its own rows and nothing else.
+    const imports = new ImportRepository(db);
+    const jobId = await imports.createJob('catalog.csv', 'csv', 1, {}, null);
+    const job = await imports.findJob(jobId);
+    if (job == null) throw new Error('the job that was just created is missing');
+    const categoryId =
+      db.queryRaw<{ id: string }>(`SELECT id FROM categories LIMIT 1`)[0]?.id ?? '';
+
+    const rows = [
+      {
+        rowNumber: 1,
+        draft: {
+          videoId: 'imp00000009',
+          title: 'סרטון שהאינדוקס שלו נכשל',
+          description: '',
+          categoryId: null,
+          channelName: '',
+          channelUrl: '',
+          tags: [],
+          durationSeconds: 60,
+          addedAt: null,
+          isHebrew: true,
+        },
+      },
+    ];
+
+    // Import with the index write sabotaged, exactly as a transient D1 failure
+    // after the commit would look.
+    const index = new SearchIndexRepository(db);
+    const failing = vi
+      .spyOn(SearchIndexRepository.prototype, 'reindex')
+      .mockRejectedValue(new Error('D1 unavailable'));
+    await expect(
+      imports.importBatch(job, rows, {
+        updateExisting: false,
+        status: 'published',
+        defaultCategoryId: categoryId,
+      }),
+    ).rejects.toThrow();
+    failing.mockRestore();
+
+    // The video is in the catalog and not in the index — the bad state.
+    expect(db.queryRaw(`SELECT 1 FROM videos WHERE id = 'imp00000009'`)).toHaveLength(1);
+    expect(db.queryRaw(`SELECT 1 FROM videos_fts WHERE video_id = 'imp00000009'`)).toHaveLength(0);
+
+    // But it is *recorded* as outstanding, which is what makes it recoverable.
+    expect(await index.backlog(50)).toContain('imp00000009');
+
+    // And draining the backlog — what the hourly maintenance run does — fixes it.
+    await index.reindex(await index.backlog(50));
+    expect(db.queryRaw(`SELECT 1 FROM videos_fts WHERE video_id = 'imp00000009'`)).toHaveLength(1);
+    expect(await index.backlog(50)).toHaveLength(0);
   });
 
   it('refuses at the door a list the write paths could not serve', () => {

@@ -247,9 +247,19 @@ export class ImportRepository extends BaseRepository {
     // — which is what this was — a failure halfway left the catalog changed and
     // the job's report describing an import that had not happened.
     const highWater = Math.max(job.lastRowNumber, ...fresh.map((row) => row.rowNumber));
+    const written = writes.map(({ row }) => row.draft.videoId);
+
     await this.batch([
       ...this.#videoStatements(writes, options.status),
       ...this.#tagStatements(writes, tagIds),
+      // Marked as needing an index *inside* this transaction, so the intent to
+      // index is as durable as the import itself. The reindex below runs after
+      // the commit and can fail on its own; if it does, the flag survives and
+      // the hourly maintenance run drains the backlog. Before this, a failed
+      // reindex left those videos in the catalog and permanently missing from
+      // search — the high-water mark had already advanced past them, so the
+      // client's retry was dropped as "already imported".
+      ...SearchIndexRepository.markStatements(written),
       {
         sql: `UPDATE import_jobs
                  SET imported_rows   = imported_rows + ?,
@@ -273,10 +283,11 @@ export class ImportRepository extends BaseRepository {
     // that class of divergence cannot come back.
     //
     // Outside the batch above on purpose: an index that is briefly behind is a
-    // video that is momentarily hard to search for, which the next batch or the
-    // next edit repairs. Rolling back a correct import because the index write
-    // failed would be the worse of the two.
-    await new SearchIndexRepository(this.db).reindex(writes.map(({ row }) => row.draft.videoId));
+    // video that is momentarily hard to search for, while rolling back a
+    // correct import because the index write failed would be the worse of the
+    // two. What makes "briefly" true rather than "forever" is the
+    // `needs_reindex` flag set in that batch — see above.
+    await new SearchIndexRepository(this.db).reindex(written);
 
     return { imported, updated, duplicates, failed: 0 };
   }

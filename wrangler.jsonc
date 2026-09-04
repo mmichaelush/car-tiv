@@ -99,7 +99,7 @@
         // A workers.dev address is `<worker>.<YOUR_ACCOUNT_SUBDOMAIN>.workers.dev`
         // — the account subdomain is not optional, so replace the placeholder
         // below with the URL `wrangler deploy` prints.
-        "APP_URL": "https://car-tiv-staging.REPLACE_WITH_ACCOUNT_SUBDOMAIN.workers.dev",
+        "APP_URL": "https://car-tiv-staging.kosher-tiv.workers.dev",
         "STATIC_CATALOG_MODE": "false",
         "FEATURE_ACCOUNTS": "true",
         "FEATURE_PLAYLISTS": "true",
@@ -132,7 +132,7 @@
         // Wrong here means Google sign-in fails (the redirect URI will not
         // match) and every URL in the sitemap points at a host that does not
         // exist. Both fail silently in the sense that the site still loads.
-        "APP_URL": "https://REPLACE_WITH_PRODUCTION_ORIGIN",
+        "APP_URL": "https://car-tiv.kosher-tiv.workers.dev",
         "STATIC_CATALOG_MODE": "false",
         "FEATURE_ACCOUNTS": "false",
         "FEATURE_PLAYLISTS": "true",

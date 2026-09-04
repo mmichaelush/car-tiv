@@ -10,7 +10,14 @@
  * `/` never grows a query string just because the page loaded.
  */
 
-import { DEFAULT_SORT, PAGINATION, SEARCH, SORT_OPTIONS, type SortOption } from '../constants.js';
+import {
+  DEFAULT_SORT,
+  PAGINATION,
+  SEARCH,
+  SORT_OPTIONS,
+  TAGS,
+  type SortOption,
+} from '../constants.js';
 import type { VideoQuery } from '../types/catalog.js';
 import { clampLimit, clampPage } from './pagination.js';
 
@@ -58,7 +65,7 @@ export function parseQuery(params: URLSearchParams, base: Partial<VideoQuery> = 
     q: (text('q') ?? base.q ?? '').slice(0, SEARCH.maxQueryLength),
     category: text('category') ?? base.category ?? 'all',
     channel: text('channel') ?? base.channel ?? null,
-    tags: parseList(params, 'tags', base.tags ?? []),
+    tags: parseList(params, 'tags', base.tags ?? []).slice(0, TAGS.maxSelected),
     ids: parseList(params, 'ids', base.ids ?? []).slice(0, PAGINATION.maxLimit),
     manufacturer: text('manufacturer') ?? base.manufacturer ?? null,
     model: text('model') ?? base.model ?? null,

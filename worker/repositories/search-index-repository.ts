@@ -112,10 +112,62 @@ export class SearchIndexRepository extends BaseRepository {
       });
     }
 
+    // Clearing the backlog flag is part of the same batch as the index write.
+    //
+    // A write that changes indexed text sets `needs_reindex = 1` alongside the
+    // change itself, so the *intent* to index is as durable as the change. This
+    // is where it is discharged — and only here, only if the index rows really
+    // landed, because the two are in one transaction. A reindex that fails
+    // leaves the flag set and the hourly maintenance run picks it up.
+    //
+    // See `migrations/0014_reindex_backlog.sql`: without it, an import whose
+    // reindex failed left videos in the catalog and permanently absent from
+    // search, because the import's own high-water mark had already advanced
+    // past them.
+    for (const chunk of chunkForBindings(videoIds)) {
+      statements.push({
+        sql: `UPDATE videos SET needs_reindex = 0
+              WHERE id IN (${placeholders(chunk.length)}) AND needs_reindex = 1`,
+        bindings: [...chunk],
+      });
+    }
+
     // One batch, so a video is never left with its old row deleted and its new
     // row not yet written — which would make it unfindable rather than stale.
     await this.batch(statements);
     return rows.length;
+  }
+
+  /**
+   * Videos whose indexed text changed and whose reindex has not succeeded.
+   *
+   * Read by the hourly maintenance run. The partial index makes this a seek
+   * over an almost-always-empty set rather than a scan of the whole catalog,
+   * which matters on a plan metered by rows read: this question is asked every
+   * hour and the answer is nearly always "none".
+   */
+  async backlog(limit: number): Promise<string[]> {
+    const rows = await this.all<{ id: string }>(
+      `SELECT id FROM videos WHERE needs_reindex = 1 ORDER BY id LIMIT ?`,
+      [limit],
+    );
+    return rows.map((row) => row.id);
+  }
+
+  /**
+   * Mark these videos as needing a reindex, as statements for the caller's own
+   * batch.
+   *
+   * Returned rather than executed, because the whole point is that the flag
+   * lands in the *same* transaction as the change that made it necessary. A
+   * separate call could fail on its own and leave a changed video with no
+   * record that its index is stale.
+   */
+  static markStatements(videoIds: readonly string[]): { sql: string; bindings: Binding[] }[] {
+    return chunkForBindings(videoIds).map((chunk) => ({
+      sql: `UPDATE videos SET needs_reindex = 1 WHERE id IN (${placeholders(chunk.length)})`,
+      bindings: [...chunk] as Binding[],
+    }));
   }
 
   /** The indexed document for one chunk of ids, read from the database. */

@@ -547,6 +547,7 @@ async function runMaintenance(context: RequestContext): Promise<Response> {
   const service = new MaintenanceService(
     context.repositories.maintenance,
     context.repositories.counters,
+    context.repositories.searchIndex,
     context.logger,
   );
   const report = await service.run(context.env);

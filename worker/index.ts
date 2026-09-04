@@ -66,6 +66,7 @@ const handler = {
       new MaintenanceService(
         context.repositories.maintenance,
         context.repositories.counters,
+        context.repositories.searchIndex,
         context.logger,
       )
         .run(env)

@@ -319,13 +319,28 @@ export class AdminRepository extends BaseRepository {
     const batchId = newId();
     let changed = 0;
 
+    // `deleted_at` only. **Not** `status`.
+    //
+    // This used to also write `status = 'removed'`, and `restore()` below used
+    // to write `status = 'published'` — so delete-then-restore *published* a
+    // video that had never been published. A `hidden` video an editor had taken
+    // down, a `pending` submission nobody had approved, a `broken` link: delete,
+    // restore, and all three are live on the site. Nothing in the interface
+    // suggests that undoing a deletion also publishes.
+    //
+    // Leaving `status` alone makes restore exactly the inverse of delete, which
+    // is the only thing an undo is allowed to be. `deleted_at IS NOT NULL`
+    // already removes the row from every public query — `LIVE` in
+    // `video-repository.ts` requires `deleted_at IS NULL` — so the status write
+    // was never doing the hiding in the first place.
+    //
     // Change and audit row together; see `batchWithResults`. One audit row per
     // chunk, sharing a batch id, so the whole operation is still one entry to
     // the reader of the log.
     for (const chunk of chunkForBindings(ids)) {
       const [result] = await this.batchWithResults([
         {
-          sql: `UPDATE videos SET deleted_at = CURRENT_TIMESTAMP, status = 'removed',
+          sql: `UPDATE videos SET deleted_at = CURRENT_TIMESTAMP,
                                   updated_at = CURRENT_TIMESTAMP
                 WHERE id IN (${placeholders(chunk.length)}) AND deleted_at IS NULL`,
           bindings: [...chunk],
@@ -351,9 +366,13 @@ export class AdminRepository extends BaseRepository {
     for (const chunk of chunkForBindings(ids)) {
       const [result] = await this.batchWithResults([
         {
-          sql: `UPDATE videos SET deleted_at = NULL, status = 'published',
+          // `status` is untouched, so a video comes back exactly as it went
+          // in — see the note on `softDelete`. `AND deleted_at IS NOT NULL` so
+          // the row count reports videos actually restored rather than every
+          // id that was passed.
+          sql: `UPDATE videos SET deleted_at = NULL,
                                   updated_at = CURRENT_TIMESTAMP
-                WHERE id IN (${placeholders(chunk.length)})`,
+                WHERE id IN (${placeholders(chunk.length)}) AND deleted_at IS NOT NULL`,
           bindings: [...chunk],
         },
         {

@@ -32,6 +32,23 @@ export const SEARCH = {
 export const TAGS = {
   maxPopular: 40,
   maxSuggestions: 12,
+  /**
+   * How many tags one query may filter by.
+   *
+   * A hard cap, not a UI nicety. Every selected tag becomes its own subquery
+   * with its own bound parameter in `VideoRepository`, and D1 rejects a
+   * statement carrying more than 100 parameters — so
+   * `GET /api/videos?tags=a,b,c,…` with a long enough list turned a public,
+   * unauthenticated URL into a 503 that anyone could trigger by typing. Every
+   * *write* path in `worker/repositories` chunks for that limit; this is the one
+   * read path where the list comes straight from a visitor.
+   *
+   * Ten is well above what the filter panel can produce — it offers 40 tags and
+   * nobody picks ten — and far below the limit. Extra tags are dropped rather
+   * than rejected: a query with eleven tags is a probe or a broken link, and the
+   * results for its first ten are a better answer than an error.
+   */
+  maxSelected: 10,
 } as const;
 
 /** Number of related videos returned by `/api/videos/:id/related`. */

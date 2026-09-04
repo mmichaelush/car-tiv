@@ -10,7 +10,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MaintenanceRepository } from '@worker/repositories/maintenance-repository.js';
 import { CountersRepository } from '@worker/repositories/counters-repository.js';
+import { SearchIndexRepository } from '@worker/repositories/search-index-repository.js';
 import { MaintenanceService } from '@worker/services/maintenance-service.js';
+import type { Logger } from '@worker/lib/logger.js';
 import type { Env } from '@worker/env.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/d1.js';
 import { seedCatalog } from '../helpers/fixtures.js';
@@ -26,7 +28,7 @@ const silentLogger = {
   warn: () => undefined,
   error: () => undefined,
   child: () => silentLogger,
-} as unknown as ConstructorParameters<typeof MaintenanceService>[2];
+} as unknown as Logger;
 
 const env = { ENVIRONMENT: 'test', APP_URL: 'https://car-tiv.test' } as unknown as Env;
 
@@ -42,7 +44,7 @@ function stubYouTube(status: number | 'network-error'): void {
 }
 
 const service = (): MaintenanceService =>
-  new MaintenanceService(repository, counters, silentLogger);
+  new MaintenanceService(repository, counters, new SearchIndexRepository(db), silentLogger);
 
 const statusOf = (id: string): string =>
   db.queryRaw<{ status: string }>(`SELECT status FROM videos WHERE id = ?`, id)[0]?.status ?? '';

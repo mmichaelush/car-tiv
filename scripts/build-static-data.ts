@@ -4,10 +4,22 @@
  *     npm run static:build
  *
  * These files are the answer to a question the plan asks directly: what happens
- * if D1 approaches its free-tier limit, or is briefly unavailable? With
- * `STATIC_CATALOG_MODE=true` the Worker serves the reference endpoints from
- * these snapshots instead of the database — same shapes, same URLs, no code
- * change anywhere above the repository layer.
+ * if D1 approaches its free-tier limit, or is briefly unavailable?
+ *
+ * ## `STATIC_CATALOG_MODE` is not wired up
+ *
+ * This comment used to say that with `STATIC_CATALOG_MODE=true` the Worker
+ * serves the reference endpoints from these snapshots instead of the database.
+ * It does not. The variable is declared in `wrangler.jsonc` and read into
+ * `Env`, and nothing anywhere branches on it — the intended shape is a second
+ * implementation of the repository interface, which is exactly what the
+ * repository layer exists to make possible, but it has not been written.
+ *
+ * The snapshots themselves are real and current; what is missing is the switch
+ * that would read them. Said the other way round: turning the flag on today
+ * changes nothing at all, silently. `docs/deployment.md` has always been right
+ * about this and this file was wrong, which is the worse way round — a comment
+ * next to the code is what the next reader believes.
  *
  * They are written to `public/static-data/`, which means they ship with the
  * built site as ordinary static assets: free to serve, and cached at the edge.

@@ -124,10 +124,24 @@ describe('videoCard', () => {
     expect(link?.getAttribute('href')).toBe('/search?tags=שמן-מנוע');
   });
 
-  it('shows at most three tags, because a card is a glance', () => {
-    const many = ['אחד', 'שתיים', 'שלוש', 'ארבע', 'חמש'];
+  it('shows enough tags to fill two rows, and no more', () => {
+    // Six, over the two rows `.video-card__tags` clips to — it was three over
+    // one row, and one row is too few: a Hebrew tag is a whole word, so two long
+    // ones fill a card's width and the third is already cut off. A card with
+    // eight tags looked like a card with two.
+    //
+    // Still bounded: a card is a glance, and the catalog has videos with a dozen
+    // tags. The CSS decides what is *visible*; this decides what is available to
+    // fill the rows, and rendering a few more than fit is how a wrap-dependent
+    // layout gets filled at every width.
+    const many = ['אחד', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה'];
     const container = render(videoCard(video({ tags: many })));
-    expect(container.querySelectorAll('.video-card__tags a')).toHaveLength(3);
+    expect(container.querySelectorAll('.video-card__tags a')).toHaveLength(6);
+  });
+
+  it('shows every tag when a video has fewer than the cap', () => {
+    const container = render(videoCard(video({ tags: ['אחד', 'שתיים'] })));
+    expect(container.querySelectorAll('.video-card__tags a')).toHaveLength(2);
   });
 
   it('renders no tag list at all when there are none', () => {

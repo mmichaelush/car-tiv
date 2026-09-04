@@ -32,15 +32,19 @@ npx wrangler d1 execute car-tiv-staging --env staging --remote --file=./seeds/00
 npm run catalog:build
 npx tsx scripts/import-catalog.ts --target=staging
 
-# 5. מונים — חובה אחרי ייבוא ישיר של קטלוג.
+# 5. מונים — כבר לא צריך צעד ידני.
 #
-# מספרי הסרטונים בכל קטגוריה, תגית וערוץ הם עמודות מתוחזקות שמתמלאות
-# רק בריענון. בלי הצעד הזה כל המספרים יופיעו כאפס עד ריצת ה-cron
-# הראשונה — האתר יעבוד, אבל ייראה ריק. ~200ms.
+# מספרי הסרטונים בכל קטגוריה, תגית וערוץ הם עמודות מתוחזקות. בעבר היה
+# כאן curl ידני, כי בלי ריענון כל המספרים באתר מופיעים כאפס עד ריצת
+# ה-cron הראשונה. `catalog:build` מייצר היום את הריענון כקובץ ה-SQL
+# האחרון של הייבוא (`0052_counters.sql`), והוא idempotent — ריצה שנייה
+# לא כותבת כלום. הצעד הידני נשאר כאן כאילו הוא חובה זמן רב אחרי שכבר
+# לא היה, וזה בדיוק סוג ההוראה שגורם לאדם הבא לחפש באג שלא קיים.
 #
-# ייבוא דרך ממשק הניהול מרענן אותם לבד; הסקריפט למעלה לא.
-curl -X POST https://<host>/api/admin/counters/refresh \
-  -H "authorization: Bearer <ADMIN_TOKEN>"
+# אם בכל זאת המספרים אפס אחרי ייבוא — זה הריענון שלא רץ, ואפשר להריץ
+# אותו ידנית:
+#   curl -X POST https://<host>/api/admin/counters/refresh \
+#     -H "authorization: Bearer <ADMIN_TOKEN>"
 ```
 
 ### הגדרת ההתחברות ב-Google Cloud
@@ -130,9 +134,10 @@ npx tsx scripts/import-catalog.ts --target=production
 # 7. פריסה
 npm run deploy:production
 
-# 8. מונים — חובה אחרי ייבוא ישיר, אחרת כל המספרים באתר יהיו אפס
-curl -X POST https://<APP_URL>/api/admin/counters/refresh \
-  -H "authorization: Bearer <ADMIN_TOKEN>"
+# 8. המונים כבר רועננו — `catalog:build` מייצר את הריענון כקובץ ה-SQL
+#    האחרון של הייבוא. הפקודה הבאה נחוצה רק אם המספרים באתר אפס:
+#   curl -X POST https://car-tiv.kosher-tiv.workers.dev/api/admin/counters/refresh \
+#     -H "authorization: Bearer <ADMIN_TOKEN>"
 ```
 
 ## הרשימה לפני production
@@ -158,8 +163,10 @@ curl -X POST https://<APP_URL>/api/admin/counters/refresh \
    ל-D1. הפתרון הוא **דומיין משלכם** ל-Worker. ראו את ההסבר המלא
    ב-[`performance.md`](performance.md#שאלת-ה-workersdev--לקרוא-לפני-production).
 
-3. **לרענן את המונים** אחרי הייבוא הראשון (`POST /api/admin/counters/refresh`),
-   אחרת כל המספרים באתר יופיעו כאפס עד ריצת ה-cron הראשונה.
+3. **לוודא שהמספרים לא אפס.** המונים מתרעננים לבד — `catalog:build` מייצר את
+   הריענון כקובץ ה-SQL האחרון של הייבוא, וייבוא דרך ממשק הניהול מרענן בסיום.
+   אם בכל זאת כל המספרים אפס, הריענון לא רץ:
+   `POST /api/admin/counters/refresh`.
 
 - [ ] `npm run verify` ירוק
 - [ ] המיגרציות רצו ב-staging **לפני** ב-production

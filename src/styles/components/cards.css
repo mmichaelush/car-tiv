@@ -296,8 +296,27 @@
   margin-block-start: var(--space-2);
   padding: 0;
   list-style: none;
+
+  /* Two rows, and the height is derived rather than typed.
+   *
+   * This was a flat `max-block-size: 1.75rem` — one row, chosen for the type
+   * scale of the time. It stopped being one row the moment the type scale moved,
+   * and it clipped a second row halfway, which looks like a rendering fault
+   * rather than a limit. A Hebrew tag is a whole word, so one row usually held
+   * two chips and hid the rest.
+   *
+   * `--card-tag-rows` times a row's real height — the chip's line box plus its
+   * padding and border, plus the gap between rows — so it stays exactly N rows
+   * whatever the density or text-size setting does to those tokens. */
+  /* The chip's own box: its line, its 2px vertical padding, its 1px border
+     — the three numbers in `.chip--tag` below. Change one there and this
+     follows, which a hand-typed height does not. */
+  --card-tag-row: calc(var(--text-xs) * var(--leading-snug) + 4px + 2px);
+  --card-tag-rows: 2;
   overflow: hidden;
-  max-block-size: 1.75rem;
+  max-block-size: calc(
+    var(--card-tag-row) * var(--card-tag-rows) + var(--space-1) * (var(--card-tag-rows) - 1)
+  );
 }
 
 .chip--tag {
