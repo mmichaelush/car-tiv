@@ -12,6 +12,26 @@
   //     wrangler d1 create car-tiv-staging
   //     wrangler d1 create car-tiv
   // and paste the returned ids here. They are not secrets.
+  //
+  // ## THE TOP LEVEL IS DEVELOPMENT. DEPLOYS MUST PASS `--env`.
+  //
+  // Everything outside the `env` block below is the *development* configuration
+  // — it is what `wrangler dev` uses, and it says `ENVIRONMENT: "development"`
+  // and `APP_URL: "http://localhost:8787"`.
+  //
+  // A bare `wrangler deploy` selects it. Cloudflare's Workers Builds defaults
+  // its deploy command to exactly that, and the first production deploy from
+  // the dashboard duly shipped the development variables to the `car-tiv`
+  // service — it only failed because the dev `database_id` was still a
+  // placeholder. Had that one field been filled in, the deploy would have
+  // *succeeded* at putting `http://localhost:8787` into production, where the
+  // symptom is a working-looking site whose sitemap and OAuth redirect point at
+  // the deployer's laptop.
+  //
+  // So: the deploy command, in the dashboard and everywhere else, is
+  //     npx wrangler deploy --env production
+  // and `npm run check:deploy production` refuses the build if this file is not
+  // ready. See docs/deployment.md.
   // ---------------------------------------------------------------------------
 
   "name": "car-tiv-dev",

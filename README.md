@@ -32,21 +32,23 @@ npm run dev:worker   # ה-API, על http://localhost:8787
 
 ## פקודות
 
-| פקודה                          | מה היא עושה                                        |
-| ------------------------------ | -------------------------------------------------- |
-| `npm run dev`                  | שרת פיתוח לצד הלקוח                                |
-| `npm run dev:worker`           | ה-Worker וה-API מקומית                             |
-| `npm run build`                | בניית האתר ל-`dist/` (כולל בניית העמודים המשפטיים) |
-| `npm run verify`               | פורמט + lint + טיפוסים + בדיקות — מה שרץ ב-CI      |
-| `npm test`                     | בדיקות בלבד                                        |
-| `npm run typecheck`            | בדיקת טיפוסים בחמשת הפרויקטים                      |
-| `npm run check:contrast`       | כל 20 ערכות הנושא ביום ובלילה מול תקן WCAG         |
-| `npm run check:layout`         | גלילה אופקית בכל עמוד ובכל רוחב מסך                |
-| `npm run catalog:build`        | יצירת קובצי SQL ודוח ייבוא מ-`data/videos`         |
-| `npm run catalog:import:local` | החלת קובצי הייבוא על D1 המקומי                     |
-| `npm run static:build`         | יצירת תמונת מצב סטטית של הקטלוג (מצב חירום)        |
-| `npm run legal:build`          | בנייה מחדש של `/privacy/` ו-`/terms/` מהמקור       |
-| `npm run deploy:staging`       | פריסה ל-staging                                    |
+| פקודה                             | מה היא עושה                                        |
+| --------------------------------- | -------------------------------------------------- |
+| `npm run dev`                     | שרת פיתוח לצד הלקוח                                |
+| `npm run dev:worker`              | ה-Worker וה-API מקומית                             |
+| `npm run build`                   | בניית האתר ל-`dist/` (כולל בניית העמודים המשפטיים) |
+| `npm run verify`                  | פורמט + lint + טיפוסים + בדיקות — מה שרץ ב-CI      |
+| `npm test`                        | בדיקות בלבד                                        |
+| `npm run typecheck`               | בדיקת טיפוסים בחמשת הפרויקטים                      |
+| `npm run check:contrast`          | כל 20 ערכות הנושא ביום ובלילה מול תקן WCAG         |
+| `npm run check:layout`            | גלילה אופקית בכל עמוד ובכל רוחב מסך                |
+| `npm run catalog:build`           | יצירת קובצי SQL ודוח ייבוא מ-`data/videos`         |
+| `npm run catalog:import:local`    | החלת קובצי הייבוא על D1 המקומי                     |
+| `npm run static:build`            | יצירת תמונת מצב סטטית של הקטלוג (מצב חירום)        |
+| `npm run legal:build`             | בנייה מחדש של `/privacy/` ו-`/terms/` מהמקור       |
+| `npm run check:deploy production` | בדיקה ש-`wrangler.jsonc` מוכן לפריסה               |
+| `npm run deploy:staging`          | פריסה ל-staging                                    |
+| `npm run deploy:production`       | פריסה ל-production (כולל הבדיקה)                   |
 
 ## מבנה
 

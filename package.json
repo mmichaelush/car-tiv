@@ -28,11 +28,14 @@
     "catalog:build": "tsx scripts/build-catalog.ts",
     "catalog:import:local": "tsx scripts/import-catalog.ts --target=local",
     "static:build": "tsx scripts/build-static-data.ts",
-    "deploy:staging": "npm run build && wrangler deploy --env staging",
-    "deploy:production": "npm run build && wrangler deploy --env production",
+    "deploy:staging": "npm run build:staging && wrangler deploy --env staging",
+    "deploy:production": "npm run build:production && wrangler deploy --env production",
     "legal:build": "tsx scripts/build-legal-pages.ts",
     "build:client": "vite build",
-    "check:contrast": "tsx scripts/check-contrast.ts"
+    "check:contrast": "tsx scripts/check-contrast.ts",
+    "check:deploy": "tsx scripts/check-deploy.ts",
+    "build:staging": "npm run check:deploy staging && npm run build",
+    "build:production": "npm run check:deploy production && npm run build"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260828.1",

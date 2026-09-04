@@ -72,6 +72,69 @@ npm run verify            # לא פורסים בלי זה
 npm run deploy:staging
 ```
 
+## פריסה מלוח הבקרה של Cloudflare (Workers Builds)
+
+כשהפריסה רצה מ-Cloudflare ולא מהמחשב, **פקודת הפריסה חייבת לכלול `--env`**.
+
+| הגדרה בלוח הבקרה | הערך                                   |
+| ---------------- | -------------------------------------- |
+| Build command    | `npm run build:production`             |
+| Deploy command   | `npx wrangler deploy --env production` |
+| Root directory   | `/`                                    |
+
+ברירת המחדל של Cloudflare היא `npx wrangler deploy` — **בלי** `--env`. הפקודה
+הזאת בוחרת את הקונפיגורציה ברמה העליונה של `wrangler.jsonc`, שהיא סביבת
+**הפיתוח**: `ENVIRONMENT: "development"` ו-`APP_URL: "http://localhost:8787"`.
+הפריסה הראשונה מלוח הבקרה עשתה בדיוק את זה, ונכשלה רק כי ה-`database_id` של
+סביבת הפיתוח עדיין היה placeholder:
+
+```
+✘ [ERROR] binding DB of type d1 must have a valid `database_id` specified [code: 10021]
+```
+
+לו השדה הזה היה מלא, הפריסה הייתה **מצליחה** ומעלה `http://localhost:8787`
+ל-production. הסימפטום אז הוא אתר שנראה תקין לגמרי, עם sitemap והתחברות Google
+שמצביעים על המחשב של מי שפרס.
+
+`npm run build:production` מריץ `npm run check:deploy production` לפני הבנייה,
+שנופל עם הודעה מפורשת אם `wrangler.jsonc` לא מוכן — במקום שגיאת API אטומה אחרי
+34 שניות והעלאה של 70 קבצים.
+
+## סדר הפעולות ל-production, פעם אחת
+
+```bash
+# 1. בסיס הנתונים. הפקודה מדפיסה database_id — מדביקים אותו ב-wrangler.jsonc
+#    תחת env.production.d1_databases[0].database_id
+npx wrangler d1 create car-tiv
+
+# 2. ה-origin האמיתי. אחרי הפריסה הראשונה wrangler מדפיס את הכתובת המלאה
+#    (car-tiv.<ACCOUNT_SUBDOMAIN>.workers.dev). מעדכנים
+#    env.production.vars.APP_URL — בלי / בסוף.
+
+# 3. בודקים שהקובץ מוכן, לפני שמנסים לפרוס
+npm run check:deploy production
+
+# 4. סודות. לא נכנסים ל-git.
+npx wrangler secret put ADMIN_TOKEN    --env production
+npx wrangler secret put SESSION_SECRET --env production
+
+# 5. סכימה ונתוני יסוד
+npm run db:migrate:production
+npx wrangler d1 execute car-tiv --env production --remote \
+  --file=./seeds/0001_reference_data.sql
+
+# 6. קטלוג
+npm run catalog:build
+npx tsx scripts/import-catalog.ts --target=production
+
+# 7. פריסה
+npm run deploy:production
+
+# 8. מונים — חובה אחרי ייבוא ישיר, אחרת כל המספרים באתר יהיו אפס
+curl -X POST https://<APP_URL>/api/admin/counters/refresh \
+  -H "authorization: Bearer <ADMIN_TOKEN>"
+```
+
 ## הרשימה לפני production
 
 **חובה — שני דברים שנכשלים בשקט:**
