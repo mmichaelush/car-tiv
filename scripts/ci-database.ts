@@ -25,11 +25,24 @@
  *    does not have, which is the failure this ordering exists to prevent.
  *  * **Reference rows** run on every deploy. The seed is `INSERT OR IGNORE`
  *    throughout, so it is idempotent by construction and costs one statement.
- *  * **The catalog** runs only when `SEED_CATALOG=1`. It is 7,876 videos across
- *    52 files and takes minutes; doing that on every push would spend the build
- *    minutes and the D1 write budget to re-import rows that have not changed.
- *    Set the variable in the dashboard for the one build that needs it, then
- *    remove it.
+ *  * **The catalog** runs when the `videos` table is empty. It is 7,876 videos
+ *    across 52 files and takes minutes; doing that on every push would spend
+ *    the build minutes and the D1 write budget to re-import rows that have not
+ *    changed, so once the table has rows this step does nothing.
+ *
+ *    Deciding by the row count rather than by a variable is the whole point.
+ *    A first deploy is the one moment nobody knows they have to opt in to
+ *    anything: the schema applies, the reference rows land, the site comes up
+ *    — and shows nothing at all, because the only step that was skipped is the
+ *    one that puts videos in it. An empty `videos` table on a deploy that
+ *    ships a 7,876-video catalog is not a state anyone wants; asking the
+ *    database is both cheaper and more honest than asking the operator to have
+ *    read a paragraph.
+ *
+ *    `SEED_CATALOG=1` forces the import against a populated table (a re-import
+ *    after editing `data/videos/*.json` — every file is idempotent, so this is
+ *    safe); `SEED_CATALOG=0` refuses it even when the table is empty, which is
+ *    the escape hatch for a deploy that must not spend minutes on an import.
  *
  * ## Failure is not fatal to the deploy
  *
@@ -48,6 +61,8 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+
+import { jsonPayload } from './lib/wrangler-json.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const ENVIRONMENT = process.env.DEPLOY_ENV ?? 'production';
@@ -124,15 +139,15 @@ async function ensureDatabaseId(): Promise<boolean> {
   let id: string | undefined;
 
   if (listed.code === 0) {
-    try {
-      const databases = JSON.parse(listed.out.slice(listed.out.indexOf('['))) as {
-        uuid?: string;
-        name?: string;
-      }[];
-      id = databases.find((database) => database.name === DATABASE)?.uuid;
-    } catch {
-      // Not JSON — wrangler printed a warning or an error instead. `id` stays
-      // undefined and the create path below reports whatever really happened.
+    // Not an array means wrangler printed a warning or an error instead of a
+    // listing. `id` stays undefined and the create path below reports whatever
+    // really happened.
+    const databases = jsonPayload(listed.out);
+    if (Array.isArray(databases)) {
+      const match = (databases as { uuid?: unknown; name?: unknown }[]).find(
+        (database) => database.name === DATABASE,
+      );
+      id = typeof match?.uuid === 'string' ? match.uuid : undefined;
     }
   }
 
@@ -165,6 +180,76 @@ async function ensureDatabaseId(): Promise<boolean> {
 
 function heading(text: string): void {
   console.log(`\n── ${text} ${'─'.repeat(Math.max(0, 56 - text.length))}`);
+}
+
+/**
+ * How many rows a table holds, or `null` when the question could not be asked.
+ *
+ * `null` is deliberately distinct from `0`: a database that answers "zero
+ * videos" is asking to be filled, while one that does not answer at all has a
+ * problem the caller must not paper over by importing a catalog into it.
+ */
+async function countRows(table: string): Promise<number | null> {
+  const result = await capture('npx', [
+    'wrangler',
+    'd1',
+    'execute',
+    DATABASE,
+    '--env',
+    ENVIRONMENT,
+    '--remote',
+    '--json',
+    `--command=SELECT COUNT(*) AS n FROM ${table}`,
+  ]);
+
+  if (result.code !== 0) return null;
+
+  const payload = jsonPayload(result.out);
+  if (!Array.isArray(payload)) return null;
+
+  const first = (payload as { results?: unknown }[])[0];
+  const rows = first?.results;
+  if (!Array.isArray(rows)) return null;
+
+  const value = (rows as { n?: unknown }[])[0]?.n;
+  return typeof value === 'number' ? value : null;
+}
+
+/**
+ * Whether to import the catalog, and why — the reason is logged, because a
+ * build that skipped the import is exactly the build whose log someone reads
+ * afterwards wondering where the videos went.
+ */
+function catalogDecision(videos: number | null): { import: boolean; because: string } {
+  const forced = process.env.SEED_CATALOG;
+
+  if (forced === '0') {
+    return {
+      import: false,
+      because: 'SEED_CATALOG=0 — the import is switched off for this build.',
+    };
+  }
+  if (forced === '1') {
+    return {
+      import: true,
+      because: 'SEED_CATALOG=1 — importing even though the table may be full.',
+    };
+  }
+  if (videos == null) {
+    return {
+      import: false,
+      because:
+        'Could not count the videos, so not importing. Something is wrong with the\n' +
+        '  database connection above; fix that first, or set SEED_CATALOG=1 to import anyway.',
+    };
+  }
+  if (videos === 0) {
+    return { import: true, because: 'The videos table is empty — this is a first deploy.' };
+  }
+  return {
+    import: false,
+    because: `${String(videos)} videos are already there. Set SEED_CATALOG=1 to re-import.`,
+  };
 }
 
 async function main(): Promise<void> {
@@ -203,7 +288,7 @@ async function main(): Promise<void> {
   heading('reference rows');
   // `INSERT OR IGNORE` throughout, so running it on every deploy writes nothing
   // after the first.
-  await wrangler([
+  const seeded = await wrangler([
     'd1',
     'execute',
     DATABASE,
@@ -214,10 +299,22 @@ async function main(): Promise<void> {
     '--file=./seeds/0001_reference_data.sql',
   ]);
 
-  if (process.env.SEED_CATALOG !== '1') {
-    console.log('\nSkipping the catalog. Set SEED_CATALOG=1 on one build to import it.');
+  // This exit code used to be discarded, which made the one failure it can
+  // report — no categories, therefore no video can name one — look exactly
+  // like success right up until the site rendered empty.
+  if (seeded !== 0) {
+    console.error(
+      '\n⚠ The reference rows did not load.\n' +
+        '  Categories, home sections and feature flags come from this file, and the\n' +
+        '  catalog needs the categories, so the import below is skipped too.',
+    );
     return;
   }
+
+  const videos = await countRows('videos');
+  const decision = catalogDecision(videos);
+  console.log(`\nCatalog: ${decision.because}`);
+  if (!decision.import) return;
 
   heading('catalog');
 
@@ -259,12 +356,28 @@ async function main(): Promise<void> {
     // catalog is harder to reason about than an obviously incomplete one, and
     // every file here is idempotent, so a re-run resumes safely.
     if (code !== 0) {
-      console.error(`\n⚠ ${file} failed. Re-run the build with SEED_CATALOG=1 to resume.`);
+      // Note the explicit variable: the automatic gate above only fires on an
+      // *empty* table, and a half-imported one is not empty, so the next build
+      // would skip the rest rather than finish it. Every file is idempotent,
+      // so re-running from the top is safe and resumes in effect.
+      console.error(
+        `\n⚠ ${file} failed, and the catalog is now partly imported.\n` +
+          '  Re-run the build with SEED_CATALOG=1 — the gate below only imports\n' +
+          '  automatically into an empty table, and this one is no longer empty.',
+      );
       return;
     }
   }
 
-  console.log('\n✓ Catalog imported, counters refreshed (the last file does that).');
+  // Counting afterwards costs one query and turns "the import printed no
+  // errors" into "the database holds this many rows", which is the claim the
+  // log should actually be making.
+  const [imported, channels] = await Promise.all([countRows('videos'), countRows('channels')]);
+  console.log(
+    `\n✓ Catalog imported — ${imported == null ? 'unknown' : String(imported)} videos, ` +
+      `${channels == null ? 'unknown' : String(channels)} channels. ` +
+      'Counters refreshed (the last file does that).',
+  );
 }
 
 await main();
