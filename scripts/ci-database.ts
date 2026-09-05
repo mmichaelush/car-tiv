@@ -45,7 +45,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -68,11 +68,111 @@ function run(command: string, args: readonly string[]): Promise<number> {
 
 const wrangler = (args: readonly string[]): Promise<number> => run('npx', ['wrangler', ...args]);
 
+/** The same, capturing stdout instead of streaming it. */
+function capture(command: string, args: readonly string[]): Promise<{ code: number; out: string }> {
+  return new Promise((resolve) => {
+    const child = spawn(command, [...args], { cwd: ROOT, shell: false });
+    let out = '';
+    child.stdout.on('data', (chunk: Buffer) => (out += chunk.toString()));
+    child.stderr.on('data', (chunk: Buffer) => (out += chunk.toString()));
+    child.on('close', (code) => {
+      resolve({ code: code ?? 1, out });
+    });
+    child.on('error', () => {
+      resolve({ code: 1, out });
+    });
+  });
+}
+
+/** A D1 database id, wherever it appears in wrangler's output. */
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/;
+
+/**
+ * Make sure the config names a real database, creating one if it does not.
+ *
+ * `wrangler deploy` refuses a binding whose `database_id` is not a real id —
+ * "binding DB of type d1 must have a valid `database_id` specified" — and the
+ * repository ships placeholders on purpose, because an id belongs to whoever
+ * deploys rather than to the code. Filling one in means running
+ * `wrangler d1 create` against the Cloudflare API, which is precisely what
+ * someone who cannot authenticate locally cannot do.
+ *
+ * Here, inside Workers Builds, wrangler *is* authenticated. So the last manual
+ * step disappears: look the database up by name, create it if this is the first
+ * deploy, and write the id into the checkout's copy of `wrangler.jsonc`.
+ *
+ * The write is to the build's own workspace — a fresh clone, thrown away when
+ * the build ends — so nothing is committed and the repository keeps its
+ * placeholder. Every build resolves the id again, by name, which is also what
+ * makes this safe to leave in place: paste the real id into `wrangler.jsonc`
+ * one day and this becomes a no-op that confirms the two agree.
+ */
+async function ensureDatabaseId(): Promise<boolean> {
+  const file = path.join(ROOT, 'wrangler.jsonc');
+  const config = readFileSync(file, 'utf8');
+  const placeholder =
+    ENVIRONMENT === 'staging' ? 'REPLACE_WITH_STAGING_D1_ID' : 'REPLACE_WITH_PRODUCTION_D1_ID';
+
+  if (!config.includes(placeholder)) {
+    console.log(`${DATABASE}: the config already carries an id.`);
+    return true;
+  }
+
+  heading(`database — ${DATABASE}`);
+
+  const listed = await capture('npx', ['wrangler', 'd1', 'list', '--json']);
+  let id: string | undefined;
+
+  if (listed.code === 0) {
+    try {
+      const databases = JSON.parse(listed.out.slice(listed.out.indexOf('['))) as {
+        uuid?: string;
+        name?: string;
+      }[];
+      id = databases.find((database) => database.name === DATABASE)?.uuid;
+    } catch {
+      // Not JSON — wrangler printed a warning or an error instead. `id` stays
+      // undefined and the create path below reports whatever really happened.
+    }
+  }
+
+  if (id != null) {
+    console.log(`Found ${DATABASE} — ${id}`);
+  } else {
+    console.log(`${DATABASE} does not exist yet; creating it.`);
+    const created = await capture('npx', ['wrangler', 'd1', 'create', DATABASE]);
+    console.log(created.out.trim());
+    id = UUID.exec(created.out)?.[0];
+
+    if (id == null) {
+      console.error(
+        `\n⚠ Could not create or find ${DATABASE}.\n` +
+          '  If the output above mentions permissions, the build token has no D1\n' +
+          '  access: add it under Workers & Pages → the build settings, or create\n' +
+          '  the database in the dashboard (Storage & Databases → D1) and paste\n' +
+          '  its id into wrangler.jsonc.',
+      );
+      return false;
+    }
+    console.log(`Created ${DATABASE} — ${id}`);
+  }
+
+  // The build workspace only. Nothing is committed.
+  writeFileSync(file, config.replaceAll(placeholder, id), 'utf8');
+  console.log("Wrote the id into this build's wrangler.jsonc.");
+  return true;
+}
+
 function heading(text: string): void {
   console.log(`\n── ${text} ${'─'.repeat(Math.max(0, 56 - text.length))}`);
 }
 
 async function main(): Promise<void> {
+  // Before anything else: `wrangler deploy` cannot run at all against a
+  // placeholder id, so this is the step that decides whether the rest is even
+  // possible.
+  if (!(await ensureDatabaseId())) return;
+
   heading(`schema — ${DATABASE}`);
 
   const migrated = await wrangler([
