@@ -36,7 +36,8 @@
     "check:deploy": "tsx scripts/check-deploy.ts",
     "build:staging": "npm run check:deploy staging && npm run build",
     "build:production": "npm run check:deploy production && npm run build",
-    "check:layout": "tsx scripts/check-layout.ts"
+    "check:layout": "tsx scripts/check-layout.ts",
+    "db:ci": "tsx scripts/ci-database.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260828.1",
