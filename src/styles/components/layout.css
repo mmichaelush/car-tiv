@@ -766,10 +766,23 @@ main,
  * layout, is left alone. */
 .site-footer nav a {
   display: grid;
-  grid-template-columns: 18px 1fr;
+  grid-template-columns: 18px minmax(0, 1fr);
   align-items: center;
   gap: var(--space-2);
   min-inline-size: 0;
+}
+
+/* The label, and the reason it is an element at all.
+ *
+ * A grid track sized `1fr` still refuses to go below its content's min-content
+ * width, and the longest label here is an email address — one token with
+ * nothing to break on. In the 145px column this grid produces at 768px it
+ * pushed the footer 57px wide and put a horizontal scrollbar on every page of
+ * the site. `minmax(0, 1fr)` lets the track shrink; `anywhere` gives the
+ * address somewhere to break. Both are needed: either alone still overflows. */
+.site-footer nav a > span {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
 }
 
 .site-footer nav a svg {

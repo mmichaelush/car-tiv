@@ -11,6 +11,7 @@
  */
 
 import type { RequestContext } from './context.js';
+import { BadRequestError } from './lib/errors.js';
 
 export type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
@@ -71,7 +72,16 @@ export class Router {
       const params: Record<string, string> = {};
       route.paramNames.forEach((name, index) => {
         const value = match[index + 1];
-        if (value != null) params[name] = decodeURIComponent(value);
+        if (value != null) {
+          try {
+            params[name] = decodeURIComponent(value);
+          } catch {
+            // `%ZZ` and friends. A malformed escape is the caller's mistake,
+            // not the server's: letting the `URIError` propagate turned a bad
+            // URL into a 500, which reads as an outage and gets logged as one.
+            throw new BadRequestError('הכתובת אינה תקינה');
+          }
+        }
       });
       return { handler: route.handler, params };
     }

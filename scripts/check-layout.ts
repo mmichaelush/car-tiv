@@ -103,6 +103,14 @@ const MEASURE = `(() => {
   // the page; an in-flow box that will not fit almost always is. The positioned
   // ones are still reported, but only when nothing in flow overflows — which is
   // the case where they really are the cause.
+  //
+  // And it named the rail a second time, which is what this paragraph is for.
+  // Comparing element rectangles cannot see an overflow whose source is a text
+  // node: an email address in a footer column widened its grid without any
+  // element's border box crossing the edge, so \`inFlow\` came out empty and
+  // the rail won by default again. Content spill — \`scrollWidth\` past
+  // \`clientWidth\` — is therefore a second signal, and it is the one that
+  // finds a word too long for its column.
   const box = root.getBoundingClientRect();
   const inFlow = [];
   const positioned = [];
@@ -110,7 +118,22 @@ const MEASURE = `(() => {
   for (const element of document.querySelectorAll('*')) {
     const rect = element.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) continue;
-    const past = Math.max(rect.right - box.right, box.left - rect.left);
+
+    // Two ways to be too wide, and only the first is visible in a rectangle.
+    const pastEdge = Math.max(rect.right - box.right, box.left - rect.left);
+    // Content wider than the box that holds it. A text node has no rectangle
+    // of its own, so an unbreakable word in a narrow column shows up here and
+    // nowhere else.
+    //
+    // Not for an element that scrolls its own content, though: a carousel is
+    // *meant* to be 3,000px wider than its viewport, and counting that spill
+    // buried the 27px that actually moved the document under three carousels.
+    // Its own \`overflow-x\` is what says so — the loop below only checks
+    // ancestors.
+    const own = getComputedStyle(element);
+    const scrolls = own.overflowX !== 'visible';
+    const spill = scrolls ? 0 : element.scrollWidth - element.clientWidth;
+    const past = Math.max(pastEdge, spill > 1 ? spill : 0);
     if (past <= 1) continue;
 
     // An unnamed <a> in a report is not actionable, and the footer's links are
@@ -137,7 +160,7 @@ const MEASURE = `(() => {
     // moves the document scrolls past unnoticed. Their overflow is contained;
     // it never reaches the document.
     let contained = false;
-    let anchored = getComputedStyle(element).position;
+    let anchored = own.position;
     for (let parent = element.parentElement; parent != null; parent = parent.parentElement) {
       if (parent === document.documentElement) break;
       const style = getComputedStyle(parent);
@@ -151,7 +174,8 @@ const MEASURE = `(() => {
     }
     if (contained) continue;
 
-    const entry = { name: name + ' (+' + String(Math.round(past)) + 'px)', past };
+    const kind = pastEdge > 1 ? 'px past the edge' : 'px of content spill';
+    const entry = { name: name + ' (+' + String(Math.round(past)) + kind + ')', past };
     if (anchored === 'fixed' || anchored === 'absolute') positioned.push(entry);
     else inFlow.push(entry);
   }

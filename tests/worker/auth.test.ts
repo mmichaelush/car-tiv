@@ -15,6 +15,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AccountRepository } from '@worker/repositories/account-repository.js';
 import { LibraryRepository } from '@worker/repositories/library-repository.js';
 import { sha256 } from '@worker/lib/crypto.js';
+import { safeReturnPath } from '@worker/services/auth-service.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/d1.js';
 import { seedCatalog } from '../helpers/fixtures.js';
 import { createTestWorker, postJson, TEST_ORIGIN, type TestWorker } from '../helpers/worker.js';
@@ -635,5 +636,64 @@ describe('/api/me/searches', () => {
       headers: { cookie: owner.cookie },
     });
     expect(body.data.savedSearches).toHaveLength(1);
+  });
+});
+
+describe('safeReturnPath', () => {
+  /**
+   * The `?return=` value survives the whole OAuth round trip in a cookie and is
+   * put into a `Location` header when Google sends the visitor back. Anything
+   * that escapes this function is a redirect the site performs on an
+   * attacker's behalf, from a link that genuinely starts at car-tiv and
+   * genuinely signs the person in — which is what makes an open redirect worth
+   * more to a phisher than a plain link.
+   */
+  const origin = 'https://car-tiv.example';
+  const safe = (value: string | null): string => safeReturnPath(value, origin);
+
+  it('keeps an ordinary path, with its query and hash', () => {
+    expect(safe('/search?q=%D7%A7%D7%95%D7%A8%D7%95%D7%9C%D7%94#top')).toBe(
+      '/search?q=%D7%A7%D7%95%D7%A8%D7%95%D7%9C%D7%94#top',
+    );
+    expect(safe('/library/')).toBe('/library/');
+  });
+
+  it('refuses every way of naming another host', () => {
+    // The first two were caught before. The rest were not.
+    expect(safe('//evil.example')).toBe('/');
+    expect(safe('https://evil.example')).toBe('/');
+
+    // A backslash: browsers normalise it to `/` while resolving, so this is a
+    // protocol-relative URL wearing a path's clothes. It passed the old
+    // "starts with / and not //" check untouched.
+    expect(safe('/\\evil.example')).toBe('/');
+    expect(safe('/\\\\evil.example')).toBe('/');
+    expect(safe('\\/evil.example')).toBe('/');
+  });
+
+  it('leaves a percent-encoded backslash alone, because it is not a backslash', () => {
+    // Worth stating rather than assuming, since the raw form two tests up is
+    // dangerous and this one is not. `%5c` stays encoded through resolution,
+    // so `/%5cevil.example` is a path on our own origin — a 404 page, not a
+    // redirect. Decoding it "to be safe" is what would create the hole.
+    expect(safe('/%5cevil.example')).toBe('/%5cevil.example');
+    expect(safe('/%5Cevil.example')).toBe('/%5Cevil.example');
+  });
+
+  it('strips the characters a browser would strip before parsing', () => {
+    // A CR or LF in a `Location` value is header injection; a tab or newline
+    // inside a URL is removed by the browser *before* it parses, so a value
+    // that looks like a path here would navigate somewhere else there.
+    expect(safe('/search\r\nSet-Cookie: a=b')).toBe('/searchSet-Cookie:%20a=b');
+    expect(safe('/\tevil.example')).toBe('/evil.example');
+    expect(safe('/\n/evil.example')).toBe('/');
+  });
+
+  it('falls back to the home page for anything else', () => {
+    expect(safe(null)).toBe('/');
+    expect(safe('')).toBe('/');
+    expect(safe('search')).toBe('/');
+    expect(safe('javascript:alert(1)')).toBe('/');
+    expect(safe('data:text/html,<script>')).toBe('/');
   });
 });

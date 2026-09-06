@@ -30,13 +30,65 @@ const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 /** How long the visitor has to complete the Google screen. */
 export const OAUTH_STATE_TTL_SECONDS = 600;
 
-/** Where a sign-in may return to. Same-origin paths only — never a full URL. */
-export function safeReturnPath(candidate: string | null): string {
+/**
+ * Where a sign-in may return to. Same-origin paths only — never a full URL.
+ *
+ * ## Why this is not a string check any more
+ *
+ * It used to be: starts with `/`, does not start with `//`. That rejects the
+ * textbook protocol-relative open redirect and misses the one next to it —
+ *
+ *     /\\evil.example
+ *
+ * — a slash followed by a *backslash*. Browsers normalise the backslash to a
+ * forward slash while resolving, so the value passes the check as a path and
+ * then navigates to `https://evil.example/`. The value survives the whole OAuth
+ * round trip in a cookie and is put straight into `Location` when Google sends
+ * the visitor back, which makes the site a redirector an attacker can point
+ * anywhere: a link that genuinely begins at car-tiv, genuinely signs the person
+ * in, and lands them somewhere else with the trust that journey earned.
+ *
+ * The escape from that class of bug is to stop pattern-matching strings and
+ * ask the URL parser instead — the same parser the browser will use. Resolve
+ * the candidate against the real origin and keep it only if it stayed there.
+ * `new URL('/\\evil.example', 'https://car-tiv…')` resolves to
+ * `https://evil.example/`, whose origin is not ours, so it is refused without
+ * anyone having had to think of backslashes.
+ *
+ * Control characters are removed first. A CR or LF in a `Location` header is
+ * header injection, and a browser strips tabs and newlines *before* parsing a
+ * URL — so `/\tevil.example` would parse one way here and navigate another.
+ *
+ * @param candidate The `?return=` value, from the query string or the cookie.
+ * @param origin The canonical origin, from `APP_URL`.
+ */
+export function safeReturnPath(candidate: string | null, origin: string): string {
   if (candidate == null || candidate.length === 0) return '/';
-  // A value starting with `//` is a protocol-relative URL to another host, and
-  // is the classic open-redirect. Only a single-slash path is accepted.
-  if (!candidate.startsWith('/') || candidate.startsWith('//')) return '/';
-  return candidate;
+
+  // Anything a browser would silently drop before parsing, plus the newlines
+  // that would end the header. Removing rather than rejecting so a stray tab
+  // does not throw a visitor back to the home page.
+  // eslint-disable-next-line no-control-regex -- these are exactly the target
+  const cleaned = candidate.replace(/[\u0000-\u001f\u007f]/g, '');
+
+  // A path, not a URL: no scheme, and not protocol-relative. Checked before
+  // resolving as well as after, because `new URL('https://evil', origin)` is a
+  // perfectly valid URL — it is just not ours, which the origin test catches,
+  // but failing early keeps the intent obvious.
+  if (!cleaned.startsWith('/') || cleaned.startsWith('//')) return '/';
+
+  let resolved: URL;
+  try {
+    resolved = new URL(cleaned, origin);
+  } catch {
+    return '/';
+  }
+
+  if (resolved.origin !== new URL(origin).origin) return '/';
+
+  // Rebuilt from the parsed parts rather than returned as given, so what is
+  // sent is exactly what was validated.
+  return `${resolved.pathname}${resolved.search}${resolved.hash}`;
 }
 
 export interface GoogleConfig {

@@ -149,11 +149,25 @@ export function createContext(
     },
 
     async readJson<T>(): Promise<T> {
+      // `Number('')` is 0 and `Number('abc')` is NaN, and `NaN > limit` is
+      // false — so a missing or malformed header falls through to the real
+      // measurement below rather than being trusted or rejected. A negative
+      // value is a lie either way.
       const declared = Number(request.headers.get('content-length') ?? '0');
-      if (declared > MAX_REQUEST_BODY_BYTES) throw new PayloadTooLargeError();
+      if (Number.isFinite(declared) && declared > MAX_REQUEST_BODY_BYTES) {
+        throw new PayloadTooLargeError();
+      }
 
       const text = await request.text();
-      if (text.length > MAX_REQUEST_BODY_BYTES) throw new PayloadTooLargeError();
+
+      // Bytes, not characters. `String.length` counts UTF-16 code units, and
+      // the site's content is Hebrew: every letter is two bytes, an emoji four,
+      // so a body measured as "under the limit" could be twice it. The limit
+      // exists to bound what the Worker holds in memory and parses, and memory
+      // is measured in bytes.
+      if (new TextEncoder().encode(text).byteLength > MAX_REQUEST_BODY_BYTES) {
+        throw new PayloadTooLargeError();
+      }
 
       try {
         return JSON.parse(text) as T;

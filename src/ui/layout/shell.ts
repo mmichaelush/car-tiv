@@ -8,7 +8,7 @@
  */
 
 import { categoryPath, ROUTES } from '@shared/core/paths.js';
-import { html, on, setHtml, toggleClass } from '../dom.js';
+import { html, on, setHtml, toggleClass, type SafeHtml } from '../dom.js';
 import { categoryIconName, icon, type IconName } from '../icons.js';
 import { mountSearchBox } from '../components/search-box.js';
 import { catalog } from '../../data/catalog-repository.js';
@@ -95,6 +95,36 @@ const NAV_GROUPS: readonly { title: string; items: readonly NavItem[] }[] = [
     ],
   },
 ];
+
+/**
+ * One link in a footer column: an icon, then a label in its own element.
+ *
+ * The label is wrapped rather than left as a bare text node, and that is the
+ * whole point. `.site-footer nav a` is a two-column grid so every label lines
+ * up on the same edge, and a bare text node becomes an anonymous grid item —
+ * which no selector can reach, so nothing could tell it it was allowed to
+ * shrink. The longest label is an email address, one unbreakable token, and in
+ * a 145px column at 768px it pushed the grid 57px wide and the page 27px into
+ * a horizontal scrollbar on every page of the site.
+ *
+ * With a real element the label can be given `min-inline-size: 0` and
+ * `overflow-wrap: anywhere`, which lets an address wrap instead of overflow.
+ */
+function footerLink(
+  href: string,
+  iconName: IconName,
+  label: string,
+  options: { external?: boolean } = {},
+): SafeHtml {
+  // Two whole anchors rather than an interpolated attribute string: `html`
+  // escapes what it interpolates, which is the reason it is safe, so
+  // `${'target="_blank"'}` would render as visible text.
+  const body = html`${icon(iconName, { size: 16 })}<span>${label}</span>`;
+
+  return options.external === true
+    ? html`<a href="${href}" target="_blank" rel="noopener noreferrer">${body}</a>`
+    : html`<a href="${href}">${body}</a>`;
+}
 
 /**
  * Render the shell into the `[data-site-header]` and `[data-site-footer]`
@@ -511,11 +541,12 @@ function renderFooter(): void {
           <div>
             <h3>קטגוריות מומלצות</h3>
             <nav>
-              ${FOOTER_CATEGORIES.map(
-                (category) =>
-                  html`<a href="${categoryPath(category.id)}"
-                    >${icon(categoryIconName(category.icon), { size: 16 })}${category.name}</a
-                  >`,
+              ${FOOTER_CATEGORIES.map((category) =>
+                footerLink(
+                  categoryPath(category.id),
+                  categoryIconName(category.icon),
+                  category.name,
+                ),
               )}
             </nav>
           </div>
@@ -523,33 +554,31 @@ function renderFooter(): void {
           <div>
             <h3>קישורים</h3>
             <nav>
-              <a href="https://rechavimzelaze.ovh/" target="_blank" rel="noopener noreferrer">
-                ${icon('message', { size: 16 })}פורום רכבים זה לזה
-              </a>
-              <a
-                href="https://rechavimzelaze.ovh/post/683722"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                ${icon('external', { size: 16 })}עוד על האתר
-              </a>
-              <a href="${ROUTES.channels}">${icon('channel', { size: 16 })}ערוצים</a>
-              <a href="${ROUTES.library}">${icon('library', { size: 16 })}הספרייה שלי</a>
-              <a href="${ROUTES.contact}">${icon('mail', { size: 16 })}צור קשר</a>
-              <a href="${ROUTES.addVideo}">${icon('upload', { size: 16 })}הוספת סרטונים</a>
+              ${footerLink('https://rechavimzelaze.ovh/', 'message', 'פורום רכבים זה לזה', {
+                external: true,
+              })}
+              ${footerLink('https://rechavimzelaze.ovh/post/683722', 'external', 'עוד על האתר', {
+                external: true,
+              })}
+              ${footerLink(ROUTES.channels, 'channel', 'ערוצים')}
+              ${footerLink(ROUTES.library, 'library', 'הספרייה שלי')}
+              ${footerLink(ROUTES.contact, 'mail', 'צור קשר')}
+              ${footerLink(ROUTES.addVideo, 'upload', 'הוספת סרטונים')}
             </nav>
           </div>
 
           <div>
             <h3>משפטי</h3>
             <nav>
-              <a href="${ROUTES.about}">${icon('info', { size: 16 })}אודות</a>
-              <a href="${ROUTES.privacy}">${icon('lock', { size: 16 })}מדיניות פרטיות</a>
-              <a href="${ROUTES.terms}">${icon('text', { size: 16 })}תנאי שימוש</a>
-              <a href="${ROUTES.contact}?subject=${encodeURIComponent('דיווח על תוכן')}">
-                ${icon('flag', { size: 16 })}דיווח על תוכן
-              </a>
-              <a href="mailto:${SITE_EMAIL}">${icon('mail', { size: 16 })}${SITE_EMAIL}</a>
+              ${footerLink(ROUTES.about, 'info', 'אודות')}
+              ${footerLink(ROUTES.privacy, 'lock', 'מדיניות פרטיות')}
+              ${footerLink(ROUTES.terms, 'text', 'תנאי שימוש')}
+              ${footerLink(
+                `${ROUTES.contact}?subject=${encodeURIComponent('דיווח על תוכן')}`,
+                'flag',
+                'דיווח על תוכן',
+              )}
+              ${footerLink(`mailto:${SITE_EMAIL}`, 'mail', SITE_EMAIL)}
             </nav>
           </div>
         </div>

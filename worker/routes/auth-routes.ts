@@ -13,6 +13,7 @@
  */
 
 import { ERROR_CODES } from '@shared/constants.js';
+import { appOrigin } from '../env.js';
 import type { RequestContext } from '../context.js';
 import {
   OAUTH_STATE_COOKIE,
@@ -42,7 +43,11 @@ function start(context: RequestContext): Response {
 
   const config = googleConfig(context.env, context.url.origin);
   const state = createState();
-  const returnPath = safeReturnPath(context.url.searchParams.get('return'));
+  // Validated against the canonical origin from `APP_URL`, not against the
+  // request's own — the `Host` header is not ours to trust, and this decides
+  // where a signed-in visitor lands.
+  const canonical = appOrigin(context.env, context.url.origin);
+  const returnPath = safeReturnPath(context.url.searchParams.get('return'), canonical);
 
   // The return path travels inside the state cookie rather than through
   // Google, so nothing a third party controls decides where we land.
@@ -67,7 +72,7 @@ async function callback(context: RequestContext): Promise<Response> {
 
   const stored = readCookie(context.request, OAUTH_STATE_COOKIE);
   const [storedState = null, storedReturn = '/'] = stored?.split('|') ?? [];
-  const returnPath = safeReturnPath(storedReturn);
+  const returnPath = safeReturnPath(storedReturn, appOrigin(context.env, context.url.origin));
   const secure = isSecure(context);
 
   // Whatever happens next, the state cookie has done its job.

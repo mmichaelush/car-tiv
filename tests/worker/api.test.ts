@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { ApiEnvelope, PageMeta } from '@shared/types/api.js';
 import type { VideoSummary } from '@shared/types/catalog.js';
+import { MAX_REQUEST_BODY_BYTES } from '@shared/constants.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/d1.js';
 import { seedCatalog } from '../helpers/fixtures.js';
 import { TEST_ORIGIN, createTestWorker, postJson, type TestWorker } from '../helpers/worker.js';
@@ -490,5 +491,29 @@ describe('unbounded query parameters', () => {
     );
     expect(status).toBe(200);
     expect(Array.isArray(body.data)).toBe(true);
+  });
+});
+
+describe('malformed requests get a 4xx, not a 500', () => {
+  it('answers a bad percent-escape in a path with 400', async () => {
+    // `decodeURIComponent('%ZZ')` throws a `URIError`, and the router called it
+    // without a guard — so a URL anyone can type turned into a 500, which reads
+    // as an outage, pages whoever is on call and buries the real errors in the
+    // log.
+    const response = await api.fetch('/api/videos/%ZZ');
+    expect(response.status).toBe(400);
+  });
+
+  it('measures a request body in bytes, not in characters', async () => {
+    // `String.length` counts UTF-16 code units. This site's content is Hebrew,
+    // two bytes a letter, so a body that measured "half the limit" was at it —
+    // and the limit exists to bound what the Worker parses, which is bytes.
+    const oversized = 'א'.repeat(MAX_REQUEST_BODY_BYTES);
+    const response = await api.fetch('/api/reports', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ videoId: 'corolla0001', reason: 'broken', note: oversized }),
+    });
+    expect(response.status).toBe(413);
   });
 });

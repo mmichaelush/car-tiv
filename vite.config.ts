@@ -59,7 +59,26 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'es2022',
     cssCodeSplit: true,
-    sourcemap: true,
+    /*
+     * Source maps in development, never in a deployed build.
+     *
+     * They were unconditional, which meant every deploy uploaded them as public
+     * static assets — about 2.5 MB of them, including a 1.67 MB map for `xlsx`
+     * — and handed anyone who asked the original TypeScript: the admin screens,
+     * the rate-limit thresholds, the comments explaining exactly where each
+     * guard is and why. That is not a vulnerability by itself, and it is a map
+     * of where to look for one.
+     *
+     * `hidden` would keep the files without the `//# sourceMappingURL` comment,
+     * which is what to switch to if error monitoring is added later — but those
+     * maps belong uploaded to the monitoring service, not served from the site.
+     *
+     * Opt-in rather than "off when it looks like production": the deploy runs
+     * a bare `npm run build` from Cloudflare's dashboard, so anything inferred
+     * from `NODE_ENV` or `CI` would be a guess about someone else's
+     * environment. `SOURCEMAP=1 npm run build` when a map is actually wanted.
+     */
+    sourcemap: process.env.SOURCEMAP === '1',
     // Performance budget. Anything above this is a bug to investigate, not a
     // warning to silence.
     //
