@@ -25,32 +25,44 @@
  *    does not have, which is the failure this ordering exists to prevent.
  *  * **Reference rows** run on every deploy. The seed is `INSERT OR IGNORE`
  *    throughout, so it is idempotent by construction and costs one statement.
- *  * **The catalog** runs when the `videos` table is empty. It is 7,876 videos
- *    across 52 files and takes minutes; doing that on every push would spend
- *    the build minutes and the D1 write budget to re-import rows that have not
- *    changed, so once the table has rows this step does nothing.
+ *  * **The catalog** is applied a few files at a time, paced against D1's
+ *    daily write limit, and picks up where it left off.
  *
- *    Deciding by the row count rather than by a variable is the whole point.
- *    A first deploy is the one moment nobody knows they have to opt in to
- *    anything: the schema applies, the reference rows land, the site comes up
- *    — and shows nothing at all, because the only step that was skipped is the
- *    one that puts videos in it. An empty `videos` table on a deploy that
- *    ships a 7,876-video catalog is not a state anyone wants; asking the
- *    database is both cheaper and more honest than asking the operator to have
- *    read a paragraph.
+ *    This used to be one loop over all 52 files, gated on `videos` being
+ *    empty, and it went over the free plan's 100,000 rows written per day on
+ *    the first deploy that ran it. `npm run catalog:cost` measures why: the
+ *    full catalog is 338,860 rows written, because Cloudflare bills index
+ *    writes as rows and a `videos` row touches six indexes. Three and a half
+ *    days of an account-wide budget, spent in one build, after which every
+ *    write in the account fails until midnight UTC.
  *
- *    `SEED_CATALOG=1` forces the import against a populated table (a re-import
- *    after editing `data/videos/*.json` — every file is idempotent, so this is
- *    safe); `SEED_CATALOG=0` refuses it even when the table is empty, which is
- *    the escape hatch for a deploy that must not spend minutes on an import.
+ *    So each file's cost is read from the manifest, files are applied while
+ *    the day's spend stays under `DAILY_BUDGET`, and every one is recorded in
+ *    `catalog_import_log`. The next deploy resumes from the first file that is
+ *    not in that table — no variable to set, nothing to remember.
  *
- * ## Failure is not fatal to the deploy
+ *    `SEED_CATALOG=1` clears that log so the whole catalog is applied again,
+ *    still paced, which is what to use after editing `data/videos/*.json`;
+ *    `SEED_CATALOG=0` skips the catalog step for one build.
  *
- * If the build token turns out not to carry D1 permissions, this reports that
- * clearly and lets the deploy proceed. A Worker that is deployed and waiting
- * for its schema is a recoverable state; a deploy blocked by a permission
- * problem in a step that is meant to be a convenience is not an improvement on
- * doing it by hand.
+ * ## D1 is the source of truth once the import has finished
+ *
+ * The JSON files are the bootstrap, not a channel for updates. A re-import
+ * adds rows and corrects `published_at`; it does not remove a tag an editor
+ * deleted or restore a title an editor rewrote, and it must not — those edits
+ * are made in the admin and live only in D1.
+ *
+ * ## Failure is reported, and it fails the build
+ *
+ * This used to return quietly on every error so the deploy could continue,
+ * with the argument that a Worker waiting for its schema is recoverable. It is
+ * — but the build went green while it waited, which is how a production deploy
+ * came to look successful with an empty database behind it. Every failure path
+ * now prints its explanation and sets a non-zero exit code, which stops
+ * `deploy:ci` before `wrangler deploy` runs.
+ *
+ * Running out of the daily write budget is deliberately *not* a failure: it is
+ * the expected end of a day's work, and the next deploy continues.
  *
  * Run by the deploy command — see `docs/deployment.md`:
  *
@@ -58,7 +70,7 @@
  */
 
 import { spawn } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
@@ -67,6 +79,39 @@ import { jsonPayload } from './lib/wrangler-json.js';
 const ROOT = path.resolve(import.meta.dirname, '..');
 const ENVIRONMENT = process.env.DEPLOY_ENV ?? 'production';
 const DATABASE = ENVIRONMENT === 'staging' ? 'car-tiv-staging' : 'car-tiv';
+
+/**
+ * How many rows written a single day's import may spend.
+ *
+ * D1's free plan allows 100,000 rows written per day, per *account* — staging
+ * and production share it, as does anything else in the account. This leaves
+ * a fifth of it alone for the things that are not the import: the migrations,
+ * the reference seed, the hourly maintenance cron, and whatever writes the
+ * live site does while the catalog is still loading.
+ *
+ * It is a ceiling on the estimate, and the estimate is not a measurement of
+ * what Cloudflare actually charged. Being wrong in the cautious direction
+ * costs an extra day; being wrong the other way costs a day of failed writes
+ * across the whole account.
+ */
+const DAILY_BUDGET = 80_000;
+
+/**
+ * Everything that went wrong; empty when nothing did.
+ *
+ * Recorded rather than thrown, because every step here still wants to print
+ * its own explanation before the process ends — and set as an exit code at the
+ * very end, which is the part that was missing. `deploy:ci` is
+ * `db:ci && … && wrangler deploy`, so a `db:ci` that returned quietly let a
+ * Worker go live against a schema that had not applied or a catalog that had
+ * not loaded, and the build went green. A deploy is allowed to be behind its
+ * database; it is not allowed to look successful while it is.
+ */
+const FAILURES: string[] = [];
+
+function failed(reason: string): void {
+  FAILURES.push(reason);
+}
 
 /** Run a command, streaming its output, and resolve with its exit code. */
 function run(command: string, args: readonly string[]): Promise<number> {
@@ -182,6 +227,29 @@ function heading(text: string): void {
   console.log(`\n── ${text} ${'─'.repeat(Math.max(0, 56 - text.length))}`);
 }
 
+/** Rows from a read-only query, or `null` when it could not be run. */
+async function queryRows<T>(sql: string): Promise<T[] | null> {
+  const result = await capture('npx', [
+    'wrangler',
+    'd1',
+    'execute',
+    DATABASE,
+    '--env',
+    ENVIRONMENT,
+    '--remote',
+    '--json',
+    `--command=${sql}`,
+  ]);
+
+  if (result.code !== 0) return null;
+
+  const payload = jsonPayload(result.out);
+  if (!Array.isArray(payload)) return null;
+
+  const rows = (payload as { results?: unknown }[])[0]?.results;
+  return Array.isArray(rows) ? (rows as T[]) : null;
+}
+
 /**
  * How many rows a table holds, or `null` when the question could not be asked.
  *
@@ -213,43 +281,6 @@ async function countRows(table: string): Promise<number | null> {
 
   const value = (rows as { n?: unknown }[])[0]?.n;
   return typeof value === 'number' ? value : null;
-}
-
-/**
- * Whether to import the catalog, and why — the reason is logged, because a
- * build that skipped the import is exactly the build whose log someone reads
- * afterwards wondering where the videos went.
- */
-function catalogDecision(videos: number | null): { import: boolean; because: string } {
-  const forced = process.env.SEED_CATALOG;
-
-  if (forced === '0') {
-    return {
-      import: false,
-      because: 'SEED_CATALOG=0 — the import is switched off for this build.',
-    };
-  }
-  if (forced === '1') {
-    return {
-      import: true,
-      because: 'SEED_CATALOG=1 — importing even though the table may be full.',
-    };
-  }
-  if (videos == null) {
-    return {
-      import: false,
-      because:
-        'Could not count the videos, so not importing. Something is wrong with the\n' +
-        '  database connection above; fix that first, or set SEED_CATALOG=1 to import anyway.',
-    };
-  }
-  if (videos === 0) {
-    return { import: true, because: 'The videos table is empty — this is a first deploy.' };
-  }
-  return {
-    import: false,
-    because: `${String(videos)} videos are already there. Set SEED_CATALOG=1 to re-import.`,
-  };
 }
 
 async function main(): Promise<void> {
@@ -311,36 +342,184 @@ async function main(): Promise<void> {
     return;
   }
 
-  const videos = await countRows('videos');
-  const decision = catalogDecision(videos);
-  console.log(`\nCatalog: ${decision.because}`);
-  if (!decision.import) return;
+  await importCatalog();
+}
 
+// ---------------------------------------------------------------------------
+// The catalog, paced against the daily write budget
+// ---------------------------------------------------------------------------
+
+/**
+ * Import as much of the catalog as today's write budget allows, and record it.
+ *
+ * ## Why this is not one loop over 52 files
+ *
+ * It was, and it went over D1's free-plan limit of 100,000 rows written per
+ * day on the first deploy that ran it. `npm run catalog:cost` measures the real
+ * figure: 338,860 rows written for the full catalog — because Cloudflare bills
+ * a write to an index as a row, and a `videos` row touches six indexes, a
+ * `video_tags` row two, on top of the FTS5 shadow tables. Three and a half days
+ * of budget, spent in one build, after which every write in the account fails
+ * until midnight UTC.
+ *
+ * So the import is paced. Each file's cost comes from the manifest the build
+ * writes, files are applied while today's spend stays under `DAILY_BUDGET`,
+ * and each one is recorded in `catalog_import_log` as it lands. The next
+ * deploy — tomorrow's, or one triggered by any push — picks up from the first
+ * file that is not in that table.
+ *
+ * ## Why the log, and not the row counts
+ *
+ * "Is `videos` empty" answers correctly exactly twice: on an untouched
+ * database, and on a finished one. In between — which is now the normal state
+ * for three days — it says "there are videos, nothing to do" about a database
+ * missing 40,000 tag relations. The log knows which files landed; the counts
+ * cannot.
+ */
+async function importCatalog(): Promise<void> {
   heading('catalog');
+
+  // Staging gets a sample, not the catalog.
+  //
+  // The 100,000 rows written a day is an *account* limit, not a per-database
+  // one, so a full staging import and a full production import are the same
+  // budget spent twice — a week of loading to have the same 7,876 videos in
+  // two places. Nothing staging is for needs all of them: the layout, the
+  // filters and the admin behave identically against a few hundred.
+  //
+  // `STAGING_FULL_CATALOG=1` overrides it, for the rare case of reproducing
+  // something that only happens at full size — and then it should be the only
+  // import running that week.
+  if (ENVIRONMENT === 'staging' && process.env.STAGING_FULL_CATALOG !== '1') {
+    console.log(
+      'Staging: importing the reference data only.\n' +
+        '  The daily write budget belongs to the account, not to one database, so a\n' +
+        "  full staging import would spend days of production's allowance to hold a\n" +
+        '  second copy of the same catalog. Set STAGING_FULL_CATALOG=1 to override.',
+    );
+    return;
+  }
 
   // Generated rather than committed: `build/catalog/` is derived from
   // `data/videos/*.json`, and a build that imported a stale copy would put a
   // catalog into production that no longer matches its source.
-  const built = await run('npm', ['run', 'catalog:build']);
-  if (built !== 0) {
+  if ((await run('npm', ['run', 'catalog:build'])) !== 0) {
     console.error('⚠ Could not build the catalog SQL; skipping the import.');
+    failed('the catalog SQL could not be built');
+    return;
+  }
+  // The manifest is what makes the pacing possible; it is measured from the
+  // files that were just generated, so it can never describe a different
+  // catalog from the one about to be applied.
+  if ((await run('npm', ['run', 'catalog:cost'])) !== 0) {
+    console.error('⚠ Could not measure the catalog; skipping the import.');
+    failed('the catalog write cost could not be measured');
     return;
   }
 
   const directory = path.join(ROOT, 'build', 'catalog');
-  if (!existsSync(directory)) {
-    console.error('⚠ build/catalog is missing after the build; skipping the import.');
+  const manifestPath = path.join(directory, 'manifest.json');
+  if (!existsSync(manifestPath)) {
+    console.error('⚠ build/catalog/manifest.json is missing; skipping the import.');
+    failed('the catalog manifest is missing');
     return;
   }
 
-  const files = readdirSync(directory)
-    .filter((name) => name.endsWith('.sql'))
-    .sort();
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    totalRowsWritten: number;
+    files: { file: string; estimatedRowsWritten: number }[];
+  };
 
-  console.log(`${String(files.length)} files to import.`);
+  if (process.env.SEED_CATALOG === '0') {
+    console.log('SEED_CATALOG=0 — the catalog step is switched off for this build.');
+    return;
+  }
 
-  for (const [index, file] of files.entries()) {
-    console.log(`  ${String(index + 1)}/${String(files.length)}  ${file}`);
+  // `SEED_CATALOG=1` means "apply everything again", which is now a supported
+  // operation rather than a hopeful one: every generated file is idempotent,
+  // including the search index, which pairs each batch with a delete of the
+  // ids it is about to write. Clearing the log is what makes the files pending
+  // again; the pacing below then spreads them over as many days as they need.
+  if (process.env.SEED_CATALOG === '1') {
+    console.log('SEED_CATALOG=1 — clearing the import log so every file is applied again.');
+    await wrangler([
+      'd1',
+      'execute',
+      DATABASE,
+      '--env',
+      ENVIRONMENT,
+      '--remote',
+      '--yes',
+      '--command=DELETE FROM catalog_import_log',
+    ]);
+  }
+
+  const applied = await appliedFiles();
+  if (applied == null) {
+    console.error(
+      '\n⚠ Could not read catalog_import_log.\n' +
+        '  It is created by migration 0015; if the migrations above succeeded and\n' +
+        '  this still fails, the import cannot be paced safely, so it is skipped.',
+    );
+    failed('the import log could not be read');
+    return;
+  }
+
+  const pending = manifest.files.filter((entry) => !applied.has(entry.file));
+
+  if (pending.length === 0) {
+    console.log(`All ${String(manifest.files.length)} catalog files are already applied.`);
+    return;
+  }
+
+  // An existing full import, from before the log existed. Adopting it rather
+  // than repeating it: this repository's own first deploy imported the whole
+  // catalog in one run, so the very first build to carry this code would
+  // otherwise spend 338,860 writes re-importing a database that is already
+  // complete.
+  if (applied.size === 0 && (await catalogLooksComplete())) {
+    console.log('The catalog is already complete; recording it rather than importing it again.');
+    for (const entry of pending) await recordApplied(entry.file, 0);
+    return;
+  }
+
+  const spentToday = await spent();
+  if (spentToday == null) {
+    console.error("⚠ Could not read today's import spend; skipping the import.");
+    failed("today's import spend could not be read");
+    return;
+  }
+
+  let budget = DAILY_BUDGET - spentToday;
+  console.log(
+    `${String(pending.length)} of ${String(manifest.files.length)} files still to apply.\n` +
+      `Budget today: ${format(budget)} of ${format(DAILY_BUDGET)} rows written remaining.`,
+  );
+
+  if (budget <= 0) {
+    console.log("\nToday's budget is spent. The next deploy after 00:00 UTC continues.");
+    return;
+  }
+
+  let importedNow = 0;
+
+  for (const entry of pending) {
+    const cost = entry.estimatedRowsWritten;
+
+    // The first file is applied even when it alone exceeds the budget —
+    // otherwise a file costing more than a day's allowance would block the
+    // import for ever. Nothing in the current catalog is close: the largest is
+    // about 18,000.
+    if (cost > budget && importedNow > 0) {
+      console.log(
+        `\nStopping before ${entry.file}: it needs ${format(cost)} rows and` +
+          ` ${format(budget)} remain today.`,
+      );
+      break;
+    }
+
+    process.stdout.write(`  ${entry.file.padEnd(30)} ~${format(cost)} rows … `);
+
     const code = await wrangler([
       'd1',
       'execute',
@@ -349,35 +528,98 @@ async function main(): Promise<void> {
       ENVIRONMENT,
       '--remote',
       '--yes',
-      `--file=./build/catalog/${file}`,
+      `--file=./build/catalog/${entry.file}`,
     ]);
 
-    // Stop at the first failure rather than ploughing on: a half-imported
-    // catalog is harder to reason about than an obviously incomplete one, and
-    // every file here is idempotent, so a re-run resumes safely.
     if (code !== 0) {
-      // Note the explicit variable: the automatic gate above only fires on an
-      // *empty* table, and a half-imported one is not empty, so the next build
-      // would skip the rest rather than finish it. Every file is idempotent,
-      // so re-running from the top is safe and resumes in effect.
       console.error(
-        `\n⚠ ${file} failed, and the catalog is now partly imported.\n` +
-          '  Re-run the build with SEED_CATALOG=1 — the gate below only imports\n' +
-          '  automatically into an empty table, and this one is no longer empty.',
+        `\n⚠ ${entry.file} failed.\n` +
+          '  If this is a quota error, the daily limit was reached sooner than the\n' +
+          '  estimate predicted; the next deploy after 00:00 UTC resumes from this\n' +
+          '  file. Every file is idempotent, so re-applying one that partly landed\n' +
+          '  is safe.',
       );
+      failed(`${entry.file} could not be applied`);
       return;
     }
+
+    await recordApplied(entry.file, cost);
+    budget -= cost;
+    importedNow += 1;
+    console.log('done');
   }
 
-  // Counting afterwards costs one query and turns "the import printed no
-  // errors" into "the database holds this many rows", which is the claim the
-  // log should actually be making.
-  const [imported, channels] = await Promise.all([countRows('videos'), countRows('channels')]);
+  const remaining = pending.length - importedNow;
+  const [videos, channels] = await Promise.all([countRows('videos'), countRows('channels')]);
+
   console.log(
-    `\n✓ Catalog imported — ${imported == null ? 'unknown' : String(imported)} videos, ` +
-      `${channels == null ? 'unknown' : String(channels)} channels. ` +
-      'Counters refreshed (the last file does that).',
+    `\n${remaining === 0 ? '✓' : '…'} ${String(importedNow)} files applied — ` +
+      `${videos == null ? 'unknown' : format(videos)} videos, ` +
+      `${channels == null ? 'unknown' : format(channels)} channels.`,
   );
+
+  if (remaining > 0) {
+    console.log(
+      `  ${String(remaining)} files remain. Deploy again after 00:00 UTC and they continue\n` +
+        '  automatically; nothing needs to be set by hand.',
+    );
+  }
 }
 
+/** Which catalog files this database already holds. `null` when unreadable. */
+async function appliedFiles(): Promise<Set<string> | null> {
+  const rows = await queryRows<{ file: string }>('SELECT file FROM catalog_import_log');
+  if (rows == null) return null;
+  return new Set(rows.map((row) => row.file));
+}
+
+/** Rows written by catalog imports today, in UTC. `null` when unreadable. */
+async function spent(): Promise<number | null> {
+  const rows = await queryRows<{ n: number | null }>(
+    "SELECT COALESCE(SUM(rows_written), 0) AS n FROM catalog_import_log WHERE applied_on = date('now')",
+  );
+  if (rows == null) return null;
+  const value = rows[0]?.n;
+  return typeof value === 'number' ? value : 0;
+}
+
+async function recordApplied(file: string, rowsWritten: number): Promise<void> {
+  await wrangler([
+    'd1',
+    'execute',
+    DATABASE,
+    '--env',
+    ENVIRONMENT,
+    '--remote',
+    '--yes',
+    '--command=' +
+      `INSERT OR REPLACE INTO catalog_import_log (file, applied_on, rows_written) ` +
+      `VALUES ('${file.replaceAll("'", "''")}', date('now'), ${String(rowsWritten)})`,
+  ]);
+}
+
+/**
+ * Whether this database already holds a finished catalog.
+ *
+ * Only asked once, on the first deploy that finds an empty log, to tell a fresh
+ * database apart from one imported before the log existed. `video_tags` is the
+ * table that decides it: it is the last thing a partial import would have
+ * finished, and the one whose absence makes the site look subtly wrong rather
+ * than obviously empty.
+ */
+async function catalogLooksComplete(): Promise<boolean> {
+  const [videos, links] = await Promise.all([countRows('videos'), countRows('video_tags')]);
+  return videos != null && videos > 0 && links != null && links > 0;
+}
+
+const format = (value: number): string => value.toLocaleString('en');
+
 await main();
+
+// The exit code is the last thing decided, after every message has been
+// printed — see `failed` for why it matters.
+const failure = FAILURES[0];
+if (failure != null) {
+  console.error(`\n✘ Database setup did not finish: ${failure}`);
+  process.exitCode = 1;
+}

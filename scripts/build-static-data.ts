@@ -34,7 +34,12 @@ import path from 'node:path';
 import { parseVehicleReference, buildVehicleIndex } from '@shared/core/vehicles.js';
 import type { RawVehicleReference } from '@shared/core/vehicles.js';
 import { formatDuration } from '@shared/core/duration.js';
-import { buildCatalog, type LegacyVideo, type NormalizedVideo } from './lib/legacy-catalog.js';
+import {
+  CATALOG_EPOCH,
+  buildCatalog,
+  type LegacyVideo,
+  type NormalizedVideo,
+} from './lib/legacy-catalog.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
@@ -101,7 +106,9 @@ async function main(): Promise<void> {
   const result = buildCatalog(files, {
     knownCategories: CATEGORIES.map((category) => category.id),
     vehicleIndex: buildVehicleIndex(parseVehicleReference(reference)),
-    fallbackDate: new Date().toISOString().slice(0, 10),
+    // The same fixed epoch the D1 catalog uses, so the static snapshot and the
+    // database cannot disagree about a row whose date will not parse.
+    fallbackDate: CATALOG_EPOCH,
   });
 
   await rm(OUT_DIR, { recursive: true, force: true });
@@ -210,7 +217,7 @@ function toSummary(
     // Included so a snapshot is readable on its own, without the formatter.
     duration: formatDuration(video.durationSeconds),
     addedAt: video.addedAt,
-    publishedAt: null,
+    publishedAt: video.publishedAt,
     thumbnailUrl: null,
     isHebrew: video.isHebrew,
     isFeatured: false,

@@ -25,6 +25,7 @@ import { parseVehicleReference, buildVehicleIndex } from '@shared/core/vehicles.
 import { indexText, slugify } from '@shared/core/text.js';
 import type { RawVehicleReference } from '@shared/core/vehicles.js';
 import {
+  CATALOG_EPOCH,
   type CatalogBuildResult,
   type LegacySourceFile,
   type LegacyVideo,
@@ -73,7 +74,7 @@ async function main(): Promise<void> {
   const result = buildCatalog(files, {
     knownCategories: [...KNOWN_CATEGORIES],
     vehicleIndex,
-    fallbackDate: new Date().toISOString().slice(0, 10),
+    fallbackDate: CATALOG_EPOCH,
   });
 
   const featured = await readFeaturedChannels(path.join(DATA_DIR, 'featured_channels.json'));
@@ -291,12 +292,24 @@ function buildVideoStatements(result: CatalogBuildResult): string[] {
         ? 'NULL'
         : `(SELECT id FROM channels WHERE slug = ${sql(video.channelSlug)})`;
 
+    // `ON CONFLICT … DO UPDATE` on this one column, rather than the
+    // `INSERT OR IGNORE` this used to be.
+    //
+    // Ignoring a conflict makes a re-import a no-op for every row that already
+    // exists, which is right for everything an editor may have touched —
+    // `status`, `added_at`, a corrected title — and wrong for `published_at`,
+    // which was introduced after 7,876 rows had already been imported without
+    // it. Ignore, and those rows keep a NULL publish date for ever and the
+    // fix ships as code that never runs. Updating exactly this column corrects
+    // them on the next import and touches nothing else.
     return (
-      `INSERT OR IGNORE INTO videos\n` +
-      `  (id, title, description, category_id, channel_id, duration_seconds, language, is_hebrew, added_at, status)\n` +
+      `INSERT INTO videos\n` +
+      `  (id, title, description, category_id, channel_id, duration_seconds, language, is_hebrew, added_at, published_at, status)\n` +
       `  VALUES (${sql(video.id)}, ${sql(video.title)}, ${sql(video.description)}, ` +
       `${sql(video.categoryId)}, ${channel}, ${String(video.durationSeconds)}, ` +
-      `${sql(video.language)}, ${video.isHebrew ? '1' : '0'}, ${sql(video.addedAt)}, 'published');`
+      `${sql(video.language)}, ${video.isHebrew ? '1' : '0'}, ${sql(video.addedAt)}, ` +
+      `${video.publishedAt == null ? 'NULL' : sql(video.publishedAt)}, 'published')\n` +
+      `  ON CONFLICT (id) DO UPDATE SET published_at = excluded.published_at;`
     );
   });
 }
@@ -365,12 +378,41 @@ function buildSearchIndexStatements(
     ];
   });
 
-  return insertMany(
-    'videos_fts',
-    ['video_id', 'title', 'manufacturers', 'models', 'tags', 'description', 'channel'],
-    rows,
-    { orIgnore: false, rowsPerStatement: 100 },
-  );
+  const columns = [
+    'video_id',
+    'title',
+    'manufacturers',
+    'models',
+    'tags',
+    'description',
+    'channel',
+  ];
+  const inserts = insertMany('videos_fts', columns, rows, {
+    orIgnore: false,
+    rowsPerStatement: 100,
+  });
+
+  // Delete before insert — the one place in the generated catalog that is not
+  // idempotent on its own.
+  //
+  // `videos_fts` is a standalone FTS5 table. FTS5 has no UNIQUE constraint and
+  // ignores `INSERT OR IGNORE`, so applying a search-index file twice does not
+  // replace those documents, it adds a second copy of each: the same video
+  // then matches twice, and every search that finds it returns it twice.
+  //
+  // That mattered the moment the import stopped being a single run. A file
+  // interrupted by the daily write limit is re-applied on the next deploy, and
+  // "re-apply what did not finish" is only safe if re-applying is a no-op.
+  // Pairing each batch with a delete of exactly the ids it is about to write
+  // makes it one, at the cost of one statement per hundred rows.
+  const statements: string[] = [];
+  for (let start = 0; start < rows.length; start += 100) {
+    const ids = rows.slice(start, start + 100).map((row) => sql(row[0] ?? ''));
+    statements.push(`DELETE FROM videos_fts WHERE video_id IN (${ids.join(', ')});`);
+    const insert = inserts[start / 100];
+    if (insert != null) statements.push(insert);
+  }
+  return statements;
 }
 
 /** Short alias so the generated SQL stays readable inline. */

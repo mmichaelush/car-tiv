@@ -52,6 +52,24 @@ export interface LegacySourceFile {
   readonly videos: readonly LegacyVideo[];
 }
 
+/**
+ * The date given to a row whose own date will not parse.
+ *
+ * A constant, not `new Date()`. `added_at` is NOT NULL and something has to go
+ * there, but taking it from the clock made the build non-deterministic: the
+ * same commit built on two days produced two different catalogs, so a
+ * re-import rewrote rows that had not changed, and "נוספו לאחרונה" put
+ * whichever videos have a broken date at the top of the site — freshly, every
+ * time anyone rebuilt.
+ *
+ * The value is the day the legacy catalog was exported. It is a placeholder
+ * and it is treated as one: `publishedAt` stays `null` for these rows, so a
+ * card shows no date at all rather than claiming this one. There is exactly
+ * one such row in the current catalog, and the build reports it as an
+ * `invalid-date` warning.
+ */
+export const CATALOG_EPOCH = '2026-01-01';
+
 export interface BuildOptions {
   /** Category ids that exist in the database. Rows outside this set are reported. */
   readonly knownCategories: readonly string[];
@@ -88,6 +106,26 @@ export interface NormalizedVideo {
   readonly isHebrew: boolean;
   readonly language: string;
   readonly addedAt: string;
+  /**
+   * The date the legacy catalog carried, when it parsed — `null` when it did
+   * not.
+   *
+   * The legacy field is called `dateAdded`, and it is not one. Its values run
+   * smoothly from 2008 to 2025 (3 rows in 2008, 1,125 in 2023), which is the
+   * shape of a *publication* history; rows added to a site arrive in the
+   * batches the editor added them in. Spot checks agree — a lockdown video
+   * dated 24/03/2020 — so this is YouTube's publish date under a misleading
+   * name.
+   *
+   * It is kept separately from `addedAt` rather than replacing it, because the
+   * two answer different questions and the site asks both: "what is new here"
+   * orders by `added_at`, and a card says when the video was made.
+   *
+   * `null` rather than a substitute: `addedAt` falls back to the build date so
+   * ordering still has something to work with, and a card that printed that
+   * fallback claimed a video from 2013 was published today.
+   */
+  readonly publishedAt: string | null;
   readonly tagSlugs: readonly string[];
   readonly vehicles: readonly VehicleMatch[];
   readonly years: readonly number[];
@@ -277,6 +315,7 @@ export function buildCatalog(
         isHebrew: readBoolean(raw.hebrewContent) ?? containsHebrew(title),
         language: (readBoolean(raw.hebrewContent) ?? containsHebrew(title)) ? 'he' : 'en',
         addedAt: parsedDate ?? options.fallbackDate,
+        publishedAt: parsedDate,
         tagSlugs,
         vehicles: detectVehicles(searchable, options.vehicleIndex),
         years: detectYears(searchable),

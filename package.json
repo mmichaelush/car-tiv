@@ -38,7 +38,8 @@
     "build:production": "npm run check:deploy production && npm run build",
     "check:layout": "tsx scripts/check-layout.ts",
     "db:ci": "tsx scripts/ci-database.ts",
-    "deploy:ci": "npm run db:ci && npm run check:deploy production && wrangler deploy --env production"
+    "deploy:ci": "npm run db:ci && npm run check:deploy production && wrangler deploy --env production",
+    "catalog:cost": "tsx scripts/measure-write-cost.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260828.1",
