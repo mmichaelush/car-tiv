@@ -355,6 +355,80 @@
   color: var(--brand);
 }
 
+/* The prose rule paints every link brand-coloured and underlined, which on a
+   grid of bordered cards reads as eight broken links. A card is already
+   obviously clickable; the underline can come back on hover. */
+.prose .toc a:not(.btn) {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+
+.prose .toc a:not(.btn):hover,
+.prose .toc a:not(.btn):focus-visible {
+  color: var(--brand);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* The contents block as a whole: a panel, set apart from the document it
+   indexes, rather than a heading with links loose underneath it. */
+.legal-toc {
+  margin-block: var(--space-6);
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+}
+
+/* Its heading is a label for the panel, not another section break — so it
+   drops the rule and the large top margin `.prose h2` gives every other
+   heading on the page. */
+.prose .legal-toc h2 {
+  margin-block: 0;
+  padding-block-start: 0;
+  border-block-start: 0;
+  font-size: var(--text-md);
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.legal-toc .toc {
+  margin-block: var(--space-3) 0;
+}
+
+/* ------------------------------------------------- Legal document rhythm
+
+   The migrated documents are deep in `<div>`s that used to carry Tailwind
+   spacing. With the classes gone, a section runs into the next with nothing
+   between the last sentence and the following heading but the h2's own margin.
+   These give the structure back without touching a word of the text. */
+
+.prose section {
+  /* `scroll-margin` so a contents link does not land the heading underneath
+     the sticky header. */
+  scroll-margin-block-start: var(--space-8);
+}
+
+.prose header h1 {
+  font-size: var(--text-2xl);
+  color: var(--text);
+  margin-block-end: var(--space-2);
+}
+
+/* The summary list at the top of each document — "what this page promises".
+   It is the one list on the page that is not part of a numbered section, and
+   it earns a panel of its own. */
+.prose header ul {
+  margin-block-start: var(--space-4);
+  padding: var(--space-4) var(--space-5);
+  padding-inline-start: calc(var(--space-5) + var(--space-4));
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-inline-start: 3px solid var(--brand);
+  border-radius: var(--radius-lg);
+}
+
 /* --------------------------------------------------------- About section */
 
 .split {

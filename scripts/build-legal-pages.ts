@@ -76,6 +76,47 @@ export function stripPresentation(html: string): string {
   );
 }
 
+/**
+ * Give the migrated markup back the two hooks the stylesheet is waiting for.
+ *
+ * `stripPresentation` removes every `class`, which is right — they were
+ * Tailwind utilities with no stylesheet behind them any more — but it also
+ * took the structure with them. The table of contents is a `<nav>` holding a
+ * bare `<div>` of eight `<a>`s, and an `<a>` is inline: with the classes gone
+ * the eight entries ran together into one wrapped paragraph of blue text with
+ * no line breaks, which is what "the contents section is missing a line break"
+ * describes.
+ *
+ * Nothing here is new design. `.toc` already exists in `pages.css` — a grid of
+ * bordered cards, used by the pages that were written rather than migrated —
+ * and the migration simply never connected the two. This reconnects them, so
+ * the fix is a class name rather than a second set of rules that would drift.
+ *
+ * `<i></i>` is the other leftover: icon-font placeholders whose class carried
+ * the glyph. They hold no text, and an empty inline box between a bullet and
+ * its sentence is a stray gap. Removed here rather than in
+ * `stripPresentation`, which is deliberately only about attributes.
+ */
+export function restoreStructure(html: string): string {
+  return (
+    html
+      // Empty icon placeholders: `<i></i>`, and the whitespace-only variants
+      // the reflow left behind.
+      .replace(/<i>\s*<\/i>\s*/gi, '')
+      // The container of the contents links — the first `<div>` after the
+      // "תוכן עניינים" heading. Anchored to the heading text so it cannot
+      // match a `<div>` anywhere else in the document.
+      .replace(
+        /(<h2>\s*תוכן עניינים\s*<\/h2>\s*)<div>/i,
+        (_match, heading: string) => `${heading}<div class="toc">`,
+      )
+      .replace(
+        /<nav>(\s*<h2>\s*תוכן עניינים)/i,
+        '<nav class="legal-toc" aria-label="תוכן עניינים">$1',
+      )
+  );
+}
+
 /** Visible text, used by the regression test to prove nothing was lost. */
 export function visibleText(html: string): string {
   return html
@@ -132,7 +173,7 @@ function indent(value: string, spaces: number): string {
 async function main(): Promise<void> {
   for (const page of PAGES) {
     const source = await readFile(path.join(ROOT, page.source), 'utf8');
-    const content = stripPresentation(extractMain(source));
+    const content = restoreStructure(stripPresentation(extractMain(source)));
 
     const before = visibleText(source);
     const after = visibleText(content);

@@ -49,6 +49,23 @@ export const TAGS = {
    * results for its first ten are a better answer than an error.
    */
   maxSelected: 10,
+
+  /**
+   * Tags carried by a `VideoSummary`, and therefore drawn on a card.
+   *
+   * Here rather than in the card, because it is a decision the server acts on:
+   * the listing query already reads every visible tag for each row, and this
+   * decides how many of them travel. Splitting it across two files is how the
+   * card came to draw six tags into a space the CSS clipped to two rows, and
+   * how raising the card's number would have changed nothing at all — the API
+   * would still have sent six.
+   *
+   * Ten fills the three rows `--card-tag-rows` allows for almost every video
+   * in the catalog. It costs about 120 bytes per row in a listing response,
+   * and no extra query: the tags are aggregated in the same statement either
+   * way.
+   */
+  perCard: 10,
 } as const;
 
 /** Number of related videos returned by `/api/videos/:id/related`. */

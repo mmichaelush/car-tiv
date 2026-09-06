@@ -103,6 +103,21 @@ export const toastError = (message: string, options: ToastOptions = {}): (() => 
 /**
  * Copy a URL, or hand it to the operating system's share sheet when there is
  * one. Either way the visitor gets a toast, so the action never feels silent.
+ *
+ * ## Call this synchronously from the click
+ *
+ * Both `navigator.share` and `navigator.clipboard.writeText` require transient
+ * user activation — a flag the browser sets on the click and clears at the
+ * first await that yields. `await import('./toast.js')` before calling this is
+ * enough to spend it, and the browser then rejects both, which is how a share
+ * button ends up doing nothing whatsoever. Import this module statically.
+ *
+ * ## Every path ends somewhere the visitor can see
+ *
+ * There is no environment where this gives up silently: the share sheet, then
+ * the clipboard, then the deprecated `execCommand` copy that still works in
+ * places the async clipboard is blocked, and finally a dialog with the link
+ * selected so it can be copied by hand.
  */
 export async function shareUrl(url: string, title: string): Promise<void> {
   if (typeof navigator.share === 'function') {
@@ -110,7 +125,8 @@ export async function shareUrl(url: string, title: string): Promise<void> {
       await navigator.share({ title, url });
       return;
     } catch (error) {
-      // The visitor cancelling the share sheet is not an error worth reporting.
+      // The visitor cancelling the share sheet is not an error worth
+      // reporting; anything else falls through to the clipboard.
       if (error instanceof DOMException && error.name === 'AbortError') return;
     }
   }
@@ -118,7 +134,52 @@ export async function shareUrl(url: string, title: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(url);
     toastSuccess('הקישור הועתק');
+    return;
   } catch {
-    toastError('לא הצלחנו להעתיק את הקישור');
+    // Blocked, unavailable over a non-secure origin, or out of activation.
+  }
+
+  if (copyWithSelection(url)) {
+    toastSuccess('הקישור הועתק');
+    return;
+  }
+
+  // Nothing automatic worked. Show it, rather than claiming a failure and
+  // leaving the visitor with no link at all.
+  const { promptDialog } = await import('./dialog.js');
+  await promptDialog({
+    title: 'העתקת הקישור',
+    label: 'הדפדפן לא איפשר העתקה אוטומטית — אפשר להעתיק מכאן',
+    value: url,
+    confirmLabel: 'סגירה',
+  });
+}
+
+/**
+ * The pre-clipboard-API copy: a hidden field, selected, and `execCommand`.
+ *
+ * Deprecated and still the only thing that works in a few real places — an
+ * iframe without `clipboard-write`, some in-app browsers, Safari once the
+ * activation has lapsed. It is synchronous, which is exactly why it survives
+ * where the promise-based API does not.
+ */
+function copyWithSelection(text: string): boolean {
+  const field = document.createElement('textarea');
+  field.value = text;
+  field.setAttribute('readonly', '');
+  field.setAttribute('aria-hidden', 'true');
+  // Off-screen rather than `display: none`: a hidden element cannot be
+  // selected, and scrolling must not jump to it.
+  field.style.cssText = 'position:fixed;inset-block-start:-1000px;opacity:0';
+  document.body.append(field);
+
+  try {
+    field.select();
+    field.setSelectionRange(0, text.length);
+    return document.execCommand('copy');
+  } catch {
+    return false;
+  } finally {
+    field.remove();
   }
 }

@@ -20,6 +20,7 @@ import type { PageMeta } from '@shared/types/api.js';
 import type { Category, Tag, VideoQuery, VideoSummary } from '@shared/types/catalog.js';
 import { catalog } from '../../data/catalog-repository.js';
 import { ApiError } from '../../data/http-client.js';
+import { shareUrl, toastSuccess } from '../../ui/components/toast.js';
 import { readPreferences } from '../preferences/preferences.js';
 import { mountCardActions, readCardState } from '../library/card-actions.js';
 import { library } from '../../data/library-repository.js';
@@ -214,7 +215,6 @@ export function mountCatalogView(options: CatalogViewOptions): CatalogViewHandle
     await library.saveSearch(name, serializeQuery(query).toString());
     await renderSavedSearches();
 
-    const { toastSuccess } = await import('../../ui/components/toast.js');
     toastSuccess('החיפוש נשמר');
   };
 
@@ -541,9 +541,19 @@ export function mountCatalogView(options: CatalogViewOptions): CatalogViewHandle
 
     cleanups.push(
       delegate(filtersPanel, 'click', '[data-action="share-filters"]', () => {
-        void import('../../ui/components/toast.js').then(({ shareUrl }) =>
-          shareUrl(window.location.href, 'סינון סרטונים ב־CAR־טיב'),
-        );
+        // Called directly, not through `import(...).then(...)`.
+        //
+        // That await was the bug: `navigator.share` and
+        // `navigator.clipboard.writeText` both require *transient user
+        // activation*, a flag the browser sets on the click and clears at the
+        // first await of a task that yields. Loading the module first spent
+        // it, so by the time `shareUrl` ran the browser refused both — and
+        // refused them by throwing, from a promise nobody was watching, which
+        // is why the button did nothing at all rather than failing visibly.
+        //
+        // `toast.js` is imported statically at the top of this module for the
+        // same reason. It is two kilobytes, and this view already shows toasts.
+        void shareUrl(window.location.href, 'סינון סרטונים ב־CAR־טיב');
       }),
     );
 

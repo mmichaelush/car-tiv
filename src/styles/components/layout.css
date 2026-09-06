@@ -755,7 +755,36 @@ main,
   transition: color var(--duration-fast) var(--ease-out);
 }
 
+/* Icons in the footer's link columns.
+ *
+ * `grid` with a fixed first track rather than `flex` with a gap: it puts every
+ * label on the same vertical line whatever its icon, so the column reads as a
+ * list instead of as text with pictures scattered through it. The alignment is
+ * the point — a ragged left edge is worse than no icons at all.
+ *
+ * Scoped to `nav` so the brand link at the top of the footer, which has its own
+ * layout, is left alone. */
+.site-footer nav a {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
+.site-footer nav a svg {
+  /* Quieter than the label until the row is hovered: an icon column at full
+     contrast competes with the words it is there to label. */
+  color: var(--text-subtle);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
 .site-footer a:hover {
+  color: var(--brand);
+}
+
+.site-footer nav a:hover svg,
+.site-footer nav a:focus-visible svg {
   color: var(--brand);
 }
 

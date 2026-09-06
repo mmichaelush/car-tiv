@@ -226,10 +226,34 @@
   flex: 1;
 }
 
+/* Category and publish date on one line: the category at the reading edge, the
+   date at the far one. `gap` plus `margin-inline-start: auto` rather than
+   `space-between`, so a card with no known publish date does not leave the
+   category floating in the middle of a justified row. */
+.video-card__topline {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  min-inline-size: 0;
+}
+
 .video-card__category {
   color: var(--brand);
   font-size: var(--text-xs);
   font-weight: var(--weight-medium);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-card__date {
+  margin-inline-start: auto;
+  flex: none;
+  color: var(--text-subtle);
+  font-size: var(--text-xs);
+  /* A date is digits and Hebrew words together; without this the browser is
+     free to reorder "לפני 3 ימים" in an RTL run. */
+  unicode-bidi: isolate;
 }
 
 .video-card__title {
@@ -257,6 +281,36 @@
   color: var(--text-muted);
   font-size: var(--text-sm);
   min-inline-size: 0;
+}
+
+/* The channel is a link now, so it has to sit above the title's stretched
+   `::after` — the same `z-index: 1` the tags and the action row use — or the
+   full-card overlay swallows every click on it.
+
+   `max-inline-size: fit-content` keeps the hit area on the name and avatar
+   rather than across the empty rest of the line, where a click would look like
+   it had missed. */
+.video-card__channel-link {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-inline-size: 0;
+  max-inline-size: fit-content;
+  color: inherit;
+  border-radius: var(--radius-sm);
+  transition: color var(--duration-fast) var(--ease-out);
+}
+
+.video-card__channel-link:hover,
+.video-card__channel-link:focus-visible {
+  color: var(--brand);
+}
+
+.video-card__channel-link:hover span {
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .video-card__channel img {
@@ -297,36 +351,65 @@
   padding: 0;
   list-style: none;
 
-  /* Two rows, and the height is derived rather than typed.
+  /* Exactly N rows, enforced rather than predicted.
    *
    * This was a flat `max-block-size: 1.75rem` — one row, chosen for the type
-   * scale of the time. It stopped being one row the moment the type scale moved,
-   * and it clipped a second row halfway, which looks like a rendering fault
-   * rather than a limit. A Hebrew tag is a whole word, so one row usually held
-   * two chips and hid the rest.
+   * scale of the time. It stopped being one row the moment the type scale
+   * moved, and it clipped a row halfway, which looks like a rendering fault
+   * rather than a limit.
    *
-   * `--card-tag-rows` times a row's real height — the chip's line box plus its
-   * padding and border, plus the gap between rows — so it stays exactly N rows
-   * whatever the density or text-size setting does to those tokens. */
-  /* The chip's own box: its line, its 2px vertical padding, its 1px border
-     — the three numbers in `.chip--tag` below. Change one there and this
-     follows, which a hand-typed height does not. */
-  --card-tag-row: calc(var(--text-xs) * var(--leading-snug) + 4px + 2px);
-  --card-tag-rows: 2;
+   * The replacement computed a row's height from the tokens the chip was
+   * *expected* to use, and that was still a prediction: `.chip--tag` inherited
+   * the body's line height rather than `--leading-snug`, so a real chip came
+   * out 27.8px against a predicted 23.6, and three predicted rows were 78.6px
+   * of space holding two rows and the top of a third. Fixing the chip's line
+   * height moved it to 25.6px and it still did not match, because a line box is
+   * not the only thing in an inline-block's height.
+   *
+   * So the number stopped being a prediction: `--card-tag-row` is the row
+   * unit, `.chip--tag` is given exactly that height with `block-size`, and this
+   * clips to `--card-tag-rows` of them plus the gaps between. The two cannot
+   * disagree, because there is now only one of them. */
+  --card-tag-row: calc(var(--text-xs) * var(--leading-snug) + 6px);
+  --card-tag-rows: 3;
   overflow: hidden;
   max-block-size: calc(
     var(--card-tag-row) * var(--card-tag-rows) + var(--space-1) * (var(--card-tag-rows) - 1)
   );
 }
 
+/* The list item, not just the chip inside it.
+ *
+ * `.video-card__tags` is a flex container and its children are the `<li>`s, so
+ * a row is as tall as an `<li>` — and an `<li>` with an inline-level chip in it
+ * establishes its own line box, which was 2px taller than the chip (25.6px
+ * against 23.55px). Three of those did not fit in a clip computed from the
+ * chip, so the third row was still cut, which is exactly the symptom the whole
+ * derivation was written to remove.
+ *
+ * Making the item a flex container gives it no line box of its own: its height
+ * is its child's height, and the row unit is the row unit everywhere. */
+.video-card__tags li {
+  display: flex;
+}
+
 .chip--tag {
-  display: inline-block;
   padding: 2px 9px;
   border: 1px solid transparent;
   border-radius: var(--radius-pill);
   background: var(--surface-2);
   color: var(--text-subtle);
   font-size: var(--text-xs);
+  /* The row unit itself, not an approximation of it. `--card-tag-row` is
+     defined on `.video-card__tags` above and inherits down to here, so the
+     chip's height and the container's clip are the same number by
+     construction — the alternative is arithmetic that has now been wrong
+     twice. `inline-flex` + `center` keeps the label optically centred at any
+     text-size setting. */
+  display: inline-flex;
+  align-items: center;
+  block-size: var(--card-tag-row, auto);
+  line-height: var(--leading-snug);
   white-space: nowrap;
   transition:
     background var(--duration-fast) var(--ease-out),
@@ -405,6 +488,32 @@
 
 .video-card__actions [aria-pressed='true'] {
   color: var(--brand);
+}
+
+/* Report or edit, never both.
+ *
+ * Both are rendered into every card and one line decides which is real, so a
+ * grid never has to wait for the session request or re-render when it lands.
+ * `data-staff` is set on the root element by the account feature; without it —
+ * a signed-out visitor, or a page whose session has not resolved yet — the
+ * report button is the one that shows, which is the safe way round: a reader
+ * who cannot edit anything is offered the thing they can do. */
+/* Scoped through `.video-card__actions` on purpose: the rule that makes every
+   control in this row a 32px grid cell is `.video-card__actions a`, specificity
+   (0,2,0), and a bare `.video-card__action--staff` at (0,1,0) loses to it — so
+   the "hidden" button rendered next to the visible one and every card carried
+   both. Matching the class inside the row makes it (0,2,0) too, and it comes
+   later in the file. */
+.video-card__actions .video-card__action--staff {
+  display: none;
+}
+
+[data-staff] .video-card__actions .video-card__action--guest {
+  display: none;
+}
+
+[data-staff] .video-card__actions .video-card__action--staff {
+  display: grid;
 }
 
 /* --------------------------------------------------------- Category card

@@ -9,7 +9,7 @@
 
 import { categoryPath, ROUTES } from '@shared/core/paths.js';
 import { html, on, setHtml, toggleClass } from '../dom.js';
-import { icon, type IconName } from '../icons.js';
+import { categoryIconName, icon, type IconName } from '../icons.js';
 import { mountSearchBox } from '../components/search-box.js';
 import { catalog } from '../../data/catalog-repository.js';
 import { openThemeDialog } from '../../features/preferences/theme-dialog.js';
@@ -41,14 +41,19 @@ export const SITE_EMAIL = 'michaelush613@gmail.com';
  * pages that make no catalog request at all, and a network round-trip for six
  * links nobody has asked for is not worth the latency. The ids are stable —
  * they are the primary keys of the `categories` table.
+ *
+ * `icon` is the name the matching row in `categories` carries — the Font
+ * Awesome name the old site used — passed through `categoryIconName` rather
+ * than picked by hand, so the footer and the category cards cannot drift into
+ * showing different glyphs for the same category.
  */
-const FOOTER_CATEGORIES: readonly { id: string; name: string }[] = [
-  { id: 'review', name: 'סקירות רכב' },
-  { id: 'maintenance', name: 'טיפולים' },
-  { id: 'diy', name: 'עשה זאת בעצמך' },
-  { id: 'upgrades', name: 'שיפורים ושדרוגים' },
-  { id: 'troubleshooting', name: 'איתור ותיקון תקלות' },
-  { id: 'collectors', name: 'רכבי אספנות' },
+const FOOTER_CATEGORIES: readonly { id: string; name: string; icon: string }[] = [
+  { id: 'review', name: 'סקירות רכב', icon: 'magnifying-glass-chart' },
+  { id: 'maintenance', name: 'טיפולים', icon: 'oil-can' },
+  { id: 'diy', name: 'עשה זאת בעצמך', icon: 'screwdriver-wrench' },
+  { id: 'upgrades', name: 'שיפורים ושדרוגים', icon: 'rocket' },
+  { id: 'troubleshooting', name: 'איתור ותיקון תקלות', icon: 'microscope' },
+  { id: 'collectors', name: 'רכבי אספנות', icon: 'car-side' },
 ];
 
 /**
@@ -507,7 +512,10 @@ function renderFooter(): void {
             <h3>קטגוריות מומלצות</h3>
             <nav>
               ${FOOTER_CATEGORIES.map(
-                (category) => html`<a href="${categoryPath(category.id)}">${category.name}</a>`,
+                (category) =>
+                  html`<a href="${categoryPath(category.id)}"
+                    >${icon(categoryIconName(category.icon), { size: 16 })}${category.name}</a
+                  >`,
               )}
             </nav>
           </div>
@@ -516,32 +524,32 @@ function renderFooter(): void {
             <h3>קישורים</h3>
             <nav>
               <a href="https://rechavimzelaze.ovh/" target="_blank" rel="noopener noreferrer">
-                פורום רכבים זה לזה
+                ${icon('message', { size: 16 })}פורום רכבים זה לזה
               </a>
               <a
                 href="https://rechavimzelaze.ovh/post/683722"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                עוד על האתר
+                ${icon('external', { size: 16 })}עוד על האתר
               </a>
-              <a href="${ROUTES.channels}">ערוצים</a>
-              <a href="${ROUTES.library}">הספרייה שלי</a>
-              <a href="${ROUTES.contact}">צור קשר</a>
-              <a href="${ROUTES.addVideo}">הוספת סרטונים</a>
+              <a href="${ROUTES.channels}">${icon('channel', { size: 16 })}ערוצים</a>
+              <a href="${ROUTES.library}">${icon('library', { size: 16 })}הספרייה שלי</a>
+              <a href="${ROUTES.contact}">${icon('mail', { size: 16 })}צור קשר</a>
+              <a href="${ROUTES.addVideo}">${icon('upload', { size: 16 })}הוספת סרטונים</a>
             </nav>
           </div>
 
           <div>
             <h3>משפטי</h3>
             <nav>
-              <a href="${ROUTES.about}">אודות</a>
-              <a href="${ROUTES.privacy}">מדיניות פרטיות</a>
-              <a href="${ROUTES.terms}">תנאי שימוש</a>
+              <a href="${ROUTES.about}">${icon('info', { size: 16 })}אודות</a>
+              <a href="${ROUTES.privacy}">${icon('lock', { size: 16 })}מדיניות פרטיות</a>
+              <a href="${ROUTES.terms}">${icon('text', { size: 16 })}תנאי שימוש</a>
               <a href="${ROUTES.contact}?subject=${encodeURIComponent('דיווח על תוכן')}">
-                דיווח על תוכן
+                ${icon('flag', { size: 16 })}דיווח על תוכן
               </a>
-              <a href="mailto:${SITE_EMAIL}">${SITE_EMAIL}</a>
+              <a href="mailto:${SITE_EMAIL}">${icon('mail', { size: 16 })}${SITE_EMAIL}</a>
             </nav>
           </div>
         </div>

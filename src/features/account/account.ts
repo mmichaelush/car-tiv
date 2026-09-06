@@ -78,6 +78,22 @@ export async function signOut(): Promise<void> {
 }
 
 /**
+ * Mark the document when the viewer holds a staff role.
+ *
+ * One attribute on the root element, read by CSS. It exists so a video card
+ * can carry both a "report" and an "edit" button and let one line of CSS pick,
+ * instead of every grid on the site waiting for the session request before it
+ * can paint — see `.video-card__action--staff` in `cards.css`.
+ *
+ * `user` is not a staff role; it is what every signed-in visitor has.
+ */
+function markStaff(session: SessionInfo): void {
+  const staff = session.roles.some((role) => role !== 'user');
+  if (staff) document.documentElement.dataset.staff = 'true';
+  else delete document.documentElement.dataset.staff;
+}
+
+/**
  * Resolve the session and, if there is one, sync the library.
  *
  * Never throws: an account problem must not stop the catalog from rendering.
@@ -86,6 +102,7 @@ export async function initAccount(): Promise<SessionInfo> {
   const session = await resolveSession();
 
   current = session;
+  markStaff(session);
   for (const listener of listeners) listener(session);
 
   reportSignInOutcome();
@@ -141,6 +158,7 @@ export async function refreshSession(): Promise<SessionInfo> {
     .catch((): SessionInfo => ({ user: null, roles: [], signInAvailable: false }));
 
   current = session;
+  markStaff(session);
   for (const listener of listeners) listener(session);
   if (session.user == null) setLibraryMirror(null);
   return session;

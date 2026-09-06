@@ -8,7 +8,17 @@
  */
 
 import { REPORT_REASONS, type ReportReason } from '@shared/constants.js';
-import type { VideoDetail } from '@shared/types/catalog.js';
+import type { VideoSummary } from '@shared/types/catalog.js';
+
+/**
+ * All either dialog reads: a title to show and an id to send.
+ *
+ * It asked for a whole `VideoDetail`, which is the video page's document —
+ * description, vehicles, related videos. That made these dialogs unusable from
+ * a card, which holds a `VideoSummary`, for no reason: neither of them ever
+ * touched a field the summary lacks.
+ */
+export type ReportableVideo = Pick<VideoSummary, 'id' | 'title'>;
 import { html, on, select, selectAll, setHtml } from '../../ui/dom.js';
 import { openDialog } from '../../ui/components/dialog.js';
 import { toastError, toastSuccess } from '../../ui/components/toast.js';
@@ -34,7 +44,7 @@ const REASON_LABELS: Readonly<Record<ReportReason, string>> = {
   other: 'משהו אחר',
 };
 
-export function openReportDialog(video: VideoDetail): void {
+export function openReportDialog(video: ReportableVideo): void {
   const handle = openDialog({
     title: 'דיווח על בעיה',
     body: html`
@@ -90,7 +100,7 @@ export function openReportDialog(video: VideoDetail): void {
   });
 }
 
-export function openFeedbackDialog(video: VideoDetail): void {
+export function openFeedbackDialog(video: ReportableVideo): void {
   const handle = openDialog({
     title: 'הערה על הסרטון',
     body: html`

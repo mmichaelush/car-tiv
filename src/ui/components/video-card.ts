@@ -11,9 +11,10 @@
  * screen readers all behave the way a visitor expects.
  */
 
+import { TAGS } from '@shared/constants.js';
 import { formatDuration } from '@shared/core/duration.js';
-import { formatRelativeDate } from '@shared/core/dates.js';
-import { ROUTES, videoPath } from '@shared/core/paths.js';
+import { formatHebrewDate, formatRelativeDate } from '@shared/core/dates.js';
+import { channelPath, ROUTES, videoPath } from '@shared/core/paths.js';
 import { slugify } from '@shared/core/text.js';
 import { thumbnailUrl } from '@shared/core/youtube.js';
 import type { VideoSummary } from '@shared/types/catalog.js';
@@ -45,17 +46,47 @@ export interface CardOptions {
 /**
  * Tags shown on a card.
  *
- * Six, over two rows. It was three over one row, and one row is too few: a
- * Hebrew tag is a whole word, so two long ones fill a card's width and the
- * third is cut off — the row read as "there is one more tag" when there were
- * often eight, and the tags are the fastest route into a filtered listing.
+ * `TAGS.perCard`, not a number of its own. It was three over one row, then six
+ * over two, and two rows still came out half empty — a Hebrew tag is a whole
+ * word, so three or four fill a row and six ran out before the second was
+ * full, which reads as a rendering fault rather than as a limit.
  *
- * Still bounded, because a card is a glance. The catalog has videos with a
- * dozen tags, and a card that showed them all would be a tag list with a
- * thumbnail on top. `--card-tag-rows` in `cards.css` is what actually clips it;
- * this number only decides how many are available to fill those rows.
+ * Three numbers have to agree for a card's tags to look deliberate, and they
+ * live in three files: how many the API sends (`TAGS.perCard`), how many the
+ * card draws (this), and how many rows the CSS shows (`--card-tag-rows` in
+ * `cards.css`). Raising the card's number alone changed nothing for a year,
+ * because the API was still sending six — so the card now takes the server's
+ * number rather than keeping a second opinion about it.
  */
-const CARD_TAGS = 6;
+const CARD_TAGS = TAGS.perCard;
+
+/**
+ * When the video was published, or nothing at all.
+ *
+ * Deliberately not `publishedAt ?? addedAt`. `added_at` is never null — the
+ * importer falls back to the day the catalog was built for a row whose date it
+ * could not parse — so falling back to it prints "היום" on a video from 2013,
+ * which is not a smaller error than printing nothing, it is a confident one.
+ * A card with no date says "we do not know"; a card saying "היום" says
+ * something false.
+ *
+ * The `title` carries the full date, because "לפני 3 ימים" is friendlier and
+ * "3 בפברואר 2026" is the fact.
+ */
+function publishedLabel(video: VideoSummary): SafeHtml {
+  const published = video.publishedAt;
+  if (published == null || published.length === 0) return html``;
+
+  const relative = formatRelativeDate(published);
+  if (relative.length === 0) return html``;
+
+  return html`<time
+    class="video-card__date"
+    datetime="${published}"
+    title="פורסם ב־${formatHebrewDate(published)}"
+    >${relative}</time
+  >`;
+}
 
 /** One card. */
 export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeHtml {
@@ -102,7 +133,18 @@ export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeH
       </div>
 
       <div class="video-card__body">
-        <p class="video-card__category">${video.categoryName}</p>
+        ${
+          // Category and date share one line, the category at the reading edge
+          // and the date at the far one. The date used to sit below the
+          // channel in its own `__meta` row, which spent a whole line of a
+          // card on four words and left this line half empty.
+          html`
+            <p class="video-card__topline">
+              <span class="video-card__category">${video.categoryName}</span>
+              ${publishedLabel(video)}
+            </p>
+          `
+        }
 
         <h3 class="video-card__title">
           <a class="video-card__title-link" href="${href}">${video.title}</a>
@@ -114,17 +156,33 @@ export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeH
             : html`
                 <p class="video-card__channel">
                   ${
-                    video.channel.imageUrl == null
-                      ? ''
-                      : html`<img
-                          src="${video.channel.imageUrl}"
-                          alt=""
-                          loading="lazy"
-                          width="22"
-                          height="22"
-                        />`
+                    // A real link, above the title's stretched `::after`.
+                    //
+                    // The channel was a `<span>`: the one piece of a card that
+                    // names a whole shelf of the catalog, and the only way to
+                    // reach that shelf was to open a video and find the link
+                    // there. Clicking it now goes straight to the channel's
+                    // page, which is what a visitor already expects a channel
+                    // name to do.
+                    html`<a
+                      class="video-card__channel-link"
+                      href="${channelPath(video.channel.slug)}"
+                      title="כל הסרטונים מ${video.channel.name}"
+                    >
+                      ${
+                        video.channel.imageUrl == null
+                          ? ''
+                          : html`<img
+                              src="${video.channel.imageUrl}"
+                              alt=""
+                              loading="lazy"
+                              width="22"
+                              height="22"
+                            />`
+                      }
+                      <span><bdi>${video.channel.name}</bdi></span>
+                    </a>`
                   }
-                  <span><bdi>${video.channel.name}</bdi></span>
                 </p>
               `
         }
@@ -135,11 +193,6 @@ export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeH
           // card component, and switching view does not re-fetch anything.
           excerpt.length === 0 ? '' : html`<p class="video-card__description">${excerpt}</p>`
         }
-
-        <div class="video-card__meta">
-          <span>${formatRelativeDate(video.addedAt)}</span>
-        </div>
-
         ${
           // The tags the API already sends. `VideoSummary.tags` is documented as
           // "a short slice of the video's tags, for the card footer" and the card
@@ -198,12 +251,42 @@ function cardActions(video: VideoSummary, isFavorite: boolean, isSaved: boolean)
       <button type="button" data-action="share" aria-label="שיתוף הסרטון" title="שיתוף">
         ${icon('share', { size: 18 })}
       </button>
+      ${
+        // Report, or edit — exactly one of the two, decided by CSS from
+        // `data-staff` on the root element rather than by a branch here.
+        //
+        // A card is rendered by a pure function from a grid that has usually
+        // painted before the session request has come back, so branching in
+        // here would mean either holding the grid for the session or
+        // re-rendering every card when it lands. Rendering both and letting
+        // one line of CSS choose costs a hidden button per card and keeps the
+        // grid independent of the session entirely.
+        html`
+          <button
+            type="button"
+            class="video-card__action--guest"
+            data-action="report"
+            aria-label="דיווח על תקלה בסרטון"
+            title="דיווח על סרטון"
+          >
+            ${icon('flag', { size: 18 })}
+          </button>
+          <a
+            class="video-card__action--staff"
+            href="${ROUTES.admin}?video=${encodeURIComponent(video.id)}"
+            aria-label="עריכת פרטי הסרטון"
+            title="עריכת פרטי הסרטון"
+          >
+            ${icon('edit', { size: 18 })}
+          </a>
+        `
+      }
       <a
-        href="https://www.youtube.com/watch?v=${video.id}"
+        href="${videoPath(video.id)}"
         target="_blank"
-        rel="noopener noreferrer"
-        aria-label="פתיחה ב־YouTube"
-        title="פתיחה ב־YouTube"
+        rel="noopener"
+        aria-label="פתיחה בכרטיסייה חדשה"
+        title="פתיחה בכרטיסייה חדשה"
       >
         ${icon('external', { size: 18 })}
       </a>

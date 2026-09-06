@@ -6,7 +6,7 @@
  * "for your car") goes through it rather than growing its own SQL.
  */
 
-import { RELATED, SEARCH } from '@shared/constants.js';
+import { RELATED, SEARCH, TAGS } from '@shared/constants.js';
 import { RELATED_WEIGHTS } from '@shared/core/relevance.js';
 import { buildPageMeta, clampLimit, clampPage, offsetFor } from '@shared/core/pagination.js';
 import { indexText } from '@shared/core/text.js';
@@ -687,7 +687,7 @@ function toSummary(row: SummaryRow): VideoSummary {
     thumbnailUrl: row.thumbnailUrl,
     isHebrew: toBoolean(row.isHebrew),
     isFeatured: toBoolean(row.isFeatured),
-    tags: splitList(row.tagNames).slice(0, 6),
+    tags: splitList(row.tagNames).slice(0, TAGS.perCard),
     excerpt: row.excerpt ?? '',
   };
 }

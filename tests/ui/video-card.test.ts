@@ -42,12 +42,64 @@ function render(markup: ReturnType<typeof videoCard>): HTMLElement {
 }
 
 describe('videoCard', () => {
-  it('links to the video page exactly once', () => {
+  it('has exactly one link that navigates in this tab, plus the new-tab action', () => {
+    // The card's whole surface is clickable through a stretched `::after` on
+    // the title link, and that only works while there is one such link — two
+    // would overlap and the one on top would win at random.
+    //
+    // The action row's "open in a new tab" points at the same page and does
+    // not take part in that: it carries `target="_blank"`, so it never
+    // navigates the current tab and never competes with the overlay. The
+    // invariant is therefore about in-tab links, which is what this asserts —
+    // counting every link to the page would forbid the button outright.
     const container = render(videoCard(video()));
-    const links = [...container.querySelectorAll('a')].filter(
+    const toVideo = [...container.querySelectorAll('a')].filter(
       (link) => link.getAttribute('href') === '/video/corolla0001',
     );
-    expect(links).toHaveLength(1);
+
+    const sameTab = toVideo.filter((link) => link.getAttribute('target') == null);
+    const newTab = toVideo.filter((link) => link.getAttribute('target') === '_blank');
+
+    expect(sameTab).toHaveLength(1);
+    expect(sameTab[0]?.className).toContain('video-card__title-link');
+    expect(newTab).toHaveLength(1);
+    // A window opened by name must not be able to reach back through
+    // `window.opener`, even to a page of ours.
+    expect(newTab[0]?.getAttribute('rel')).toContain('noopener');
+  });
+
+  it('sends the channel name to that channel, above the card overlay', () => {
+    // The one piece of a card that names a whole shelf of the catalog. It used
+    // to be a `<span>`, so the only route to a channel page was to open a video
+    // and find the link there.
+    const container = render(videoCard(video()));
+    const link = container.querySelector('.video-card__channel-link');
+    expect(link?.getAttribute('href')).toBe('/channel/auto-il');
+  });
+
+  it('shows the publish date, and nothing at all when there is none', () => {
+    // `added_at` is never null — the importer falls back to the day the catalog
+    // was built — so a card that fell back to it would print "היום" on a video
+    // from 2013. Silence is the honest answer.
+    const withDate = render(videoCard(video({ publishedAt: '2020-03-24' })));
+    expect(withDate.querySelector('.video-card__date')?.getAttribute('datetime')).toBe(
+      '2020-03-24',
+    );
+
+    const without = render(videoCard(video({ publishedAt: null })));
+    expect(without.querySelector('.video-card__date')).toBeNull();
+    expect(without.textContent).not.toContain('היום');
+  });
+
+  it('offers a report button to a reader and an edit link to staff', () => {
+    // Both are rendered into every card and CSS picks one from `data-staff` on
+    // the root element, so a grid never waits for the session request before it
+    // can paint. Which means both must always be in the markup.
+    const container = render(videoCard(video()));
+    expect(container.querySelector('[data-action="report"]')).not.toBeNull();
+    expect(container.querySelector('.video-card__action--staff')?.getAttribute('href')).toContain(
+      '/admin/',
+    );
   });
 
   it('escapes a hostile title', () => {
@@ -124,19 +176,34 @@ describe('videoCard', () => {
     expect(link?.getAttribute('href')).toBe('/search?tags=שמן-מנוע');
   });
 
-  it('shows enough tags to fill two rows, and no more', () => {
-    // Six, over the two rows `.video-card__tags` clips to — it was three over
-    // one row, and one row is too few: a Hebrew tag is a whole word, so two long
-    // ones fill a card's width and the third is already cut off. A card with
-    // eight tags looked like a card with two.
+  it('shows enough tags to fill three rows, and no more', () => {
+    // Ten, over the three rows `.video-card__tags` clips to. It was three over
+    // one row, then six over two — and six could not fill two rows, because a
+    // Hebrew tag is a whole word and three or four of them fill a row, so the
+    // second row came out half empty and the card looked clipped rather than
+    // bounded.
     //
-    // Still bounded: a card is a glance, and the catalog has videos with a dozen
-    // tags. The CSS decides what is *visible*; this decides what is available to
-    // fill the rows, and rendering a few more than fit is how a wrap-dependent
-    // layout gets filled at every width.
-    const many = ['אחד', 'שתיים', 'שלוש', 'ארבע', 'חמש', 'שש', 'שבע', 'שמונה'];
+    // Still bounded: a card is a glance, and the catalog has videos with a
+    // dozen tags. The CSS decides what is *visible*; this decides what is
+    // available to fill the rows, and rendering a few more than fit is how a
+    // wrap-dependent layout gets filled at every width. The two numbers move
+    // together — `CARD_TAGS` here, `--card-tag-rows` in `cards.css`.
+    const many = [
+      'אחד',
+      'שתיים',
+      'שלוש',
+      'ארבע',
+      'חמש',
+      'שש',
+      'שבע',
+      'שמונה',
+      'תשע',
+      'עשר',
+      'אחת עשרה',
+      'שתים עשרה',
+    ];
     const container = render(videoCard(video({ tags: many })));
-    expect(container.querySelectorAll('.video-card__tags a')).toHaveLength(6);
+    expect(container.querySelectorAll('.video-card__tags a')).toHaveLength(10);
   });
 
   it('shows every tag when a video has fewer than the cap', () => {
