@@ -48,6 +48,8 @@ import { MAX_BULK_IDS, PLAN_LIMITS } from '@shared/constants.js';
 import { idsSchema } from '@worker/routes/admin-routes.js';
 import { IMPORT_BATCH_SIZE } from '@worker/routes/import-routes.js';
 import { ImportRepository } from '@worker/repositories/import-repository.js';
+import { LibraryRepository } from '@worker/repositories/library-repository.js';
+import { MAX_MERGE_ITEMS, MAX_PLAYLIST_REORDER } from '@worker/routes/account-routes.js';
 import type { Env } from '@worker/env.js';
 import { createTestDatabase, type TestDatabase } from '../helpers/d1.js';
 import { seedCatalog } from '../helpers/fixtures.js';
@@ -725,5 +727,129 @@ describe('no LIKE pattern exceeds what D1 accepts', () => {
     await expect(catalog.listChannels({ q: long })).resolves.toBeDefined();
     await expect(new SearchRepository(db).suggest(long)).resolves.toBeDefined();
     await expect(new AdminRepository(db).listVideos({ q: long })).resolves.toBeDefined();
+  });
+});
+
+describe('a first sign-in stays inside one Worker invocation', () => {
+  /**
+   * The merge that runs the first time someone signs in, and the reorder that
+   * runs when they drag a playlist about.
+   *
+   * These were the last two `for (…) await …` loops in the write paths: one D1
+   * query per favourite, per playlist item, per history entry, against a limit
+   * of fifty per invocation — and the request they are in is the one that must
+   * not fail, because the visitor's entire device library is in it. Accounts
+   * being switched off in production is the only reason it had never been hit.
+   *
+   * The numbers below are measured at exactly the list sizes the routes
+   * accept, so raising `MAX_MERGE_ITEMS` without making the statements cheaper
+   * fails here rather than in production.
+   */
+  const BUDGET = PLAN_LIMITS.queriesPerInvocation;
+  const HEADROOM = 10;
+
+  const cost = async (work: () => Promise<unknown>): Promise<number> =>
+    (await db.record(async () => void (await work()))).length;
+
+  /** A user row the library can hang off. */
+  function seedUser(): string {
+    const id = 'user-budget';
+    db.runRaw(
+      `INSERT OR IGNORE INTO users (id, email, display_name) VALUES (?, ?, ?)`,
+      id,
+      'a@b.c',
+      'בודק',
+    );
+    return id;
+  }
+
+  it('merges the largest device library the API accepts', async () => {
+    const userId = seedUser();
+    const ids = seedManyVideos(MAX_MERGE_ITEMS);
+    const library = new LibraryRepository(db);
+
+    const favorites = await cost(() => library.addFavorites(userId, ids));
+    expect(favorites, `${String(favorites)} statements for favourites`).toBeLessThanOrEqual(
+      BUDGET - HEADROOM,
+    );
+
+    const playlistId = await library.watchLaterId(userId);
+    const items = await cost(() => library.addManyToPlaylist(userId, playlistId, ids));
+    expect(items, `${String(items)} statements for the playlist`).toBeLessThanOrEqual(
+      BUDGET - HEADROOM,
+    );
+
+    const history = await cost(() =>
+      library.recordProgressMany(
+        userId,
+        ids.map((videoId, index) => ({
+          videoId,
+          progressSeconds: index,
+          isCompleted: index % 3 === 0,
+        })),
+      ),
+    );
+    expect(history, `${String(history)} statements for the history`).toBeLessThanOrEqual(
+      BUDGET - HEADROOM,
+    );
+
+    // And all three together, which is what one merge request actually does.
+    expect(
+      favorites + items + history,
+      `${String(favorites + items + history)} statements for the whole merge`,
+    ).toBeLessThanOrEqual(BUDGET - HEADROOM);
+  });
+
+  it('actually stores what it merged', async () => {
+    // Cheapness is not the only requirement: a set-based rewrite that silently
+    // dropped rows would pass every budget assertion above.
+    const userId = seedUser();
+    const ids = seedManyVideos(5);
+    const library = new LibraryRepository(db);
+
+    await library.addFavorites(userId, [...ids, 'missing0001']);
+    await library.recordProgressMany(userId, [
+      { videoId: ids[0] ?? '', progressSeconds: 90, isCompleted: false },
+      { videoId: 'missing0002', progressSeconds: 5, isCompleted: false },
+    ]);
+
+    // The unknown ids are skipped rather than failing the statement — a device
+    // library is months old and will name videos the catalog has since lost.
+    expect(await library.listFavorites(userId)).toHaveLength(ids.length);
+
+    const history = await library.listHistory(userId);
+    expect(history).toHaveLength(1);
+    expect(history[0]?.progressSeconds).toBe(90);
+  });
+
+  it('reorders the longest playlist the API accepts', async () => {
+    const userId = seedUser();
+    const ids = seedManyVideos(MAX_PLAYLIST_REORDER);
+    const library = new LibraryRepository(db);
+
+    const playlistId = await library.watchLaterId(userId);
+    await library.addManyToPlaylist(userId, playlistId, ids);
+
+    const statements = await cost(() =>
+      library.reorderPlaylist(userId, playlistId, [...ids].reverse()),
+    );
+    expect(statements, `${String(statements)} statements`).toBeLessThanOrEqual(BUDGET - HEADROOM);
+  });
+
+  it('puts the videos in the order it was given', async () => {
+    const userId = seedUser();
+    const ids = seedManyVideos(4);
+    const library = new LibraryRepository(db);
+    const playlistId = await library.watchLaterId(userId);
+
+    await library.addManyToPlaylist(userId, playlistId, ids);
+    const reversed = [...ids].reverse();
+    await library.reorderPlaylist(userId, playlistId, reversed);
+
+    const stored = db.queryRaw<{ video_id: string }>(
+      `SELECT video_id FROM playlist_items WHERE playlist_id = ? ORDER BY position`,
+      playlistId,
+    );
+    expect(stored.map((row) => row.video_id)).toEqual(reversed);
   });
 });

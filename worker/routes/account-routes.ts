@@ -20,8 +20,35 @@ import { get, patch, post, remove, type RouteDefinition, type RouteParams } from
 import { requireAccount } from './auth-routes.js';
 import { WATCH_LATER_KEY } from '../repositories/library-repository.js';
 
-/** How many videos one merge request may carry. */
-const MAX_MERGE_ITEMS = 1_000;
+/**
+ * How many videos one merge request may carry, per list.
+ *
+ * Derived from D1's fifty-queries-per-invocation limit, and *measured* rather
+ * than reasoned about: `plan-limits.test.ts` counts the statements the three
+ * set-based writes actually issue at exactly this size. The estimate said 600
+ * would cost 42 statements; the measurement said 45, because the playlist
+ * append also reads `MAX(position)`, checks ownership and touches the row. 500
+ * costs 39, which leaves eleven for the session lookup, the merge record and
+ * whatever a future change adds.
+ *
+ * It was 1,000 with a `for` loop behind it — one query per video, so a
+ * thousand of them — and it would have failed on the first sign-in with any
+ * real library. Anything beyond this is truncated rather than rejected: a
+ * visitor signing in should not be told their library is too big.
+ */
+export const MAX_MERGE_ITEMS = 500;
+
+/**
+ * How many videos one reorder request may carry.
+ *
+ * Its own number, because its arithmetic is its own: a reorder binds each id
+ * twice — once in the `CASE`, once in the `IN` — plus its position, so about
+ * 29 videos fit in a statement and 600 need 21 of them, well inside the fifty
+ * a Worker invocation may issue. Unlike the merge it is a single statement
+ * shape with no reads to share the budget with, so it can afford the larger
+ * list. `plan-limits.test.ts` measures both.
+ */
+export const MAX_PLAYLIST_REORDER = 600;
 
 /** `GET /api/me/library` — everything, in one request. */
 async function getLibrary(context: RequestContext): Promise<Response> {
@@ -247,7 +274,7 @@ async function addPlaylistItem(context: RequestContext, params: RouteParams): Pr
   if (Array.isArray(body.videoIds)) {
     const ids = body.videoIds
       .filter((value): value is string => typeof value === 'string' && isVideoId(value))
-      .slice(0, MAX_MERGE_ITEMS);
+      .slice(0, MAX_PLAYLIST_REORDER);
     await context.repositories.library.reorderPlaylist(account.user.id, playlistId, ids);
     return ok({ id: playlistId, count: ids.length }, {}, { cache: CACHE.none });
   }
@@ -315,16 +342,21 @@ async function mergeGuestLibrary(context: RequestContext): Promise<Response> {
   const watchLater = readIdList(body.watchLater);
   const history = readHistoryList(body.history);
 
-  for (const videoId of favorites) await library.addFavorite(userId, videoId);
+  // Set-based, not a loop.
+  //
+  // Each of these three used to be `for (…) await …`, i.e. one D1 query per
+  // video, in a single Worker invocation that D1 caps at fifty. A device
+  // library of any real size failed the moment accounts were switched on —
+  // which is exactly when a first sign-in happens, and exactly the request that
+  // must not fail, because the visitor's whole library is in it.
+  await library.addFavorites(userId, favorites);
 
   if (watchLater.length > 0) {
     const playlistId = await library.watchLaterId(userId);
-    for (const videoId of watchLater) await library.addToPlaylist(userId, playlistId, videoId);
+    await library.addManyToPlaylist(userId, playlistId, watchLater);
   }
 
-  for (const entry of history) {
-    await library.recordProgress(userId, entry.videoId, entry.progressSeconds, entry.isCompleted);
-  }
+  await library.recordProgressMany(userId, history);
 
   const total = favorites.length + watchLater.length + history.length;
   await accounts.recordMerge(userId, deviceId, total);

@@ -85,7 +85,23 @@ export function renderAccountSlot(slot: Element, session: SessionInfo): void {
 
   if (button != null) {
     on(button, 'click', () => {
-      void signOut();
+      // A failed sign-out is visible, not silent. The session cookie is
+      // HttpOnly, so only the server can end the session; if the request never
+      // arrived, reloading would come back signed in and look like the button
+      // doing nothing. `signOut` reloads on success, so nothing after this
+      // runs in the happy path.
+      button.disabled = true;
+      void signOut()
+        .then((done) => {
+          if (done) return;
+          button.disabled = false;
+          void import('../../ui/components/toast.js').then(({ toastError }) => {
+            toastError('לא הצלחנו לנתק — בדקו את החיבור ונסו שוב');
+          });
+        })
+        .catch(() => {
+          button.disabled = false;
+        });
     });
   }
 

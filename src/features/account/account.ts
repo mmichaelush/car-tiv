@@ -66,15 +66,30 @@ export function signInHref(returnPath?: string): string {
   return account.signInHref(returnPath);
 }
 
-export async function signOut(): Promise<void> {
+/**
+ * Sign out, and only claim to have done so when it happened.
+ *
+ * This used to swallow the failure and reload anyway, on the reasoning that
+ * the visitor asked to leave. But the session cookie is `HttpOnly`: the
+ * browser cannot clear it and the server is the only thing that can end the
+ * session. A request that never arrived leaves the cookie valid, so the reload
+ * comes back signed in — which reads as the button not working, on the one
+ * action where a visitor most needs to be sure.
+ *
+ * Worse on a shared computer, where "I pressed sign out and it stayed signed
+ * in" is the difference between a bug and someone else reading your library.
+ *
+ * @returns `true` when the session really ended.
+ */
+export async function signOut(): Promise<boolean> {
   try {
     await account.logout();
   } catch {
-    // Even if the request failed, the visitor asked to leave — reloading with
-    // a dead cookie lands them signed out either way.
+    return false;
   }
   setLibraryMirror(null);
   window.location.reload();
+  return true;
 }
 
 /**

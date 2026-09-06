@@ -17,7 +17,7 @@
 import type { D1Database } from '@cloudflare/workers-types';
 import { newId } from '../lib/crypto.js';
 import { NotFoundError } from '../lib/errors.js';
-import { BaseRepository } from './base.js';
+import { BaseRepository, chunkForBindings } from './base.js';
 
 /** The system playlist every account has. */
 export const WATCH_LATER_KEY = 'watch-later';
@@ -84,6 +84,39 @@ export class LibraryRepository extends BaseRepository {
     );
   }
 
+  /**
+   * Add many favourites in as few statements as D1's limits allow.
+   *
+   * The merge on first sign-in used to call `addFavorite` in a loop — one
+   * `await` per video, so one D1 query per video. A device library of a few
+   * hundred items therefore needed a few hundred queries in a single Worker
+   * invocation, and D1 allows fifty. The feature was switched off in
+   * production, which is the only reason nobody had hit it.
+   *
+   * `INSERT … SELECT … WHERE id IN (…)` does the same work set-based: the join
+   * to `videos` is what silently drops an id that is no longer in the catalog,
+   * which is the behaviour the one-at-a-time version got from `WHERE EXISTS`
+   * and which matters here — a device library is months old and will contain
+   * videos that have since been removed.
+   *
+   * @returns How many statements it took, so the budget tests can count them.
+   */
+  async addFavorites(userId: string, videoIds: readonly string[]): Promise<number> {
+    if (videoIds.length === 0) return 0;
+
+    // One binding for the user, one per id.
+    const chunks = chunkForBindings(videoIds, { perItem: 1, fixed: 1 });
+
+    await this.batch(
+      chunks.map((chunk) => ({
+        sql: `INSERT OR IGNORE INTO favorites (user_id, video_id)
+              SELECT ?, id FROM videos WHERE id IN (${chunk.map(() => '?').join(', ')})`,
+        bindings: [userId, ...chunk],
+      })),
+    );
+    return chunks.length;
+  }
+
   async removeFavorite(userId: string, videoId: string): Promise<void> {
     await this.run(`DELETE FROM favorites WHERE user_id = ? AND video_id = ?`, [userId, videoId]);
   }
@@ -139,6 +172,65 @@ export class LibraryRepository extends BaseRepository {
          last_watched_at  = CURRENT_TIMESTAMP`,
       [userId, videoId, Math.max(0, Math.floor(progressSeconds)), isCompleted ? 1 : 0, videoId],
     );
+  }
+
+  /**
+   * Record many playback positions at once.
+   *
+   * The set-based twin of `recordProgress`, for the same reason
+   * `addFavorites` exists: the merge called it once per entry.
+   *
+   * A `SELECT … UNION ALL SELECT …` subquery is what makes one statement carry
+   * many rows while still joining each to `videos` — the join is the existence
+   * check, so an id the catalog no longer has is skipped rather than failing
+   * the statement. (`VALUES (…) AS t(a, b)` would read better and is not
+   * SQLite: it has no syntax for naming a values list's columns, and the
+   * `column1`, `column2` it assigns instead are worse than an explicit alias
+   * on the first row.) The conflict clause is the same one `recordProgress` uses,
+   * restated here rather than shared because SQLite has no way to parameterise
+   * it and a divergence would be a silent behaviour change on one path only;
+   * `tests/worker/plan-limits.test.ts` asserts the two agree.
+   */
+  async recordProgressMany(
+    userId: string,
+    entries: readonly { videoId: string; progressSeconds: number; isCompleted: boolean }[],
+  ): Promise<number> {
+    if (entries.length === 0) return 0;
+
+    // Three bindings per entry — id, seconds, completed — plus the user.
+    const chunks = chunkForBindings(entries, { perItem: 3, fixed: 1 });
+
+    await this.batch(
+      chunks.map((chunk) => ({
+        sql: `INSERT INTO watch_history
+                (user_id, video_id, progress_seconds, is_completed, watch_count, last_watched_at)
+              SELECT ?, v.id, incoming.seconds, incoming.completed, 1, CURRENT_TIMESTAMP
+              FROM (${chunk
+                .map((_row, index) =>
+                  index === 0
+                    ? 'SELECT ? AS video_id, ? AS seconds, ? AS completed'
+                    : 'SELECT ?, ?, ?',
+                )
+                .join(' UNION ALL ')}) AS incoming
+              JOIN videos v ON v.id = incoming.video_id
+              ON CONFLICT (user_id, video_id) DO UPDATE SET
+                progress_seconds = CASE WHEN excluded.progress_seconds > 0
+                                        THEN excluded.progress_seconds
+                                        ELSE watch_history.progress_seconds END,
+                is_completed     = MAX(watch_history.is_completed, excluded.is_completed),
+                watch_count      = watch_history.watch_count + excluded.is_completed,
+                last_watched_at  = CURRENT_TIMESTAMP`,
+        bindings: [
+          userId,
+          ...chunk.flatMap((entry) => [
+            entry.videoId,
+            Math.max(0, Math.floor(entry.progressSeconds)),
+            entry.isCompleted ? 1 : 0,
+          ]),
+        ],
+      })),
+    );
+    return chunks.length;
   }
 
   async clearHistory(userId: string): Promise<void> {
@@ -291,6 +383,57 @@ export class LibraryRepository extends BaseRepository {
     await this.#touch(playlistId);
   }
 
+  /**
+   * Append many videos to a playlist, keeping the sparse positions.
+   *
+   * The set-based twin of `addToPlaylist`, which the merge called once per
+   * video. `MAX(position)` is read once for the whole batch rather than once
+   * per video, and each row's position is computed from its index — so the
+   * spacing stays 10 apart and a later drag-and-drop still rewrites one row.
+   *
+   * `row_number()` is deliberately not used: the ids arrive in a known order
+   * and the position can simply be bound, which keeps the statement portable
+   * and readable.
+   */
+  async addManyToPlaylist(
+    userId: string,
+    playlistId: string,
+    videoIds: readonly string[],
+  ): Promise<number> {
+    if (videoIds.length === 0) return 0;
+    await this.#assertOwnership(userId, playlistId);
+
+    const last = await this.count(
+      `SELECT COALESCE(MAX(position), 0) AS value FROM playlist_items WHERE playlist_id = ?`,
+      [playlistId],
+    );
+
+    const rows = videoIds.map((videoId, index) => ({
+      videoId,
+      position: last + (index + 1) * 10,
+    }));
+
+    // Two bindings per row — id and position — plus the playlist.
+    const chunks = chunkForBindings(rows, { perItem: 2, fixed: 1 });
+
+    await this.batch(
+      chunks.map((chunk) => ({
+        sql: `INSERT OR IGNORE INTO playlist_items (playlist_id, video_id, position)
+              SELECT ?, v.id, incoming.position
+              FROM (${chunk
+                .map((_row, index) =>
+                  index === 0 ? 'SELECT ? AS video_id, ? AS position' : 'SELECT ?, ?',
+                )
+                .join(' UNION ALL ')}) AS incoming
+              JOIN videos v ON v.id = incoming.video_id`,
+        bindings: [playlistId, ...chunk.flatMap((row) => [row.videoId, row.position])],
+      })),
+    );
+
+    await this.#touch(playlistId);
+    return chunks.length;
+  }
+
   async removeFromPlaylist(userId: string, playlistId: string, videoId: string): Promise<void> {
     await this.#assertOwnership(userId, playlistId);
     await this.run(`DELETE FROM playlist_items WHERE playlist_id = ? AND video_id = ?`, [
@@ -308,10 +451,34 @@ export class LibraryRepository extends BaseRepository {
   ): Promise<void> {
     await this.#assertOwnership(userId, playlistId);
 
+    // One UPDATE per chunk, not one per video.
+    //
+    // This built a batch with a statement per item, so reordering a 400-video
+    // playlist was 400 D1 queries in one Worker invocation against a limit of
+    // fifty. A `CASE video_id WHEN … THEN …` moves the per-row data into the
+    // statement instead of into the statement *count*.
+    //
+    // Three bindings per video — the id in the CASE, its position, and the id
+    // again in the `IN` — plus the playlist, so about 29 videos per statement
+    // and 7 statements for the largest list `MAX_PLAYLIST_REORDER` allows. The
+    // `IN` is not redundant: without it the UPDATE would touch every row in the
+    // playlist, rewriting the unlisted ones to the value they already hold,
+    // which SQLite still counts as a write.
+    const ordered = videoIds.map((videoId, index) => ({ videoId, position: (index + 1) * 10 }));
+    const chunks = chunkForBindings(ordered, { perItem: 3, fixed: 1 });
+
     await this.batch(
-      videoIds.map((videoId, index) => ({
-        sql: `UPDATE playlist_items SET position = ? WHERE playlist_id = ? AND video_id = ?`,
-        bindings: [(index + 1) * 10, playlistId, videoId],
+      chunks.map((chunk) => ({
+        sql: `UPDATE playlist_items
+              SET position = CASE video_id
+                ${chunk.map(() => 'WHEN ? THEN ?').join('\n                ')}
+              END
+              WHERE playlist_id = ? AND video_id IN (${chunk.map(() => '?').join(', ')})`,
+        bindings: [
+          ...chunk.flatMap((row) => [row.videoId, row.position]),
+          playlistId,
+          ...chunk.map((row) => row.videoId),
+        ],
       })),
     );
     await this.#touch(playlistId);
