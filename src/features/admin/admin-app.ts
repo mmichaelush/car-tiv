@@ -10,7 +10,7 @@
  * token is a shared secret entered once per session.
  */
 
-import { MAX_BULK_IDS, VIDEO_STATUSES, type VideoStatus } from '@shared/constants.js';
+import { MAX_BULK_IDS, SEARCH, VIDEO_STATUSES, type VideoStatus } from '@shared/constants.js';
 import { formatDuration } from '@shared/core/duration.js';
 import { formatRelativeDate } from '@shared/core/dates.js';
 import { videoPath } from '@shared/core/paths.js';
@@ -1104,7 +1104,23 @@ async function renderSearchInsights(container: HTMLElement): Promise<void> {
       </div>
 
       <div class="section">
-        <div class="section-heading"><h2>החיפושים הפופולריים</h2></div>
+        <div class="section-heading">
+          <h2>החיפושים הפופולריים</h2>
+          <p class="muted">
+            ${
+              // Said out loud, because a number that is a tenth of the truth
+              // and does not say so is worse than no number: an editor would
+              // read "40 חיפושים" and conclude the query is rare.
+              //
+              // Successful searches are sampled at ${String(Math.round(SEARCH.logSampleRate * 100))}%
+              // to keep the analytics inside the daily D1 write budget; the
+              // figures below are scaled back up, and are therefore estimates.
+              // Searches with no results are logged in full — those are the
+              // ones worth having exactly.
+              `מוערך מתוך מדגם של ${String(Math.round(SEARCH.logSampleRate * 100))}% מהחיפושים המוצלחים.`
+            }
+          </p>
+        </div>
         <div class="panel">
           ${
             data.popular.length === 0
@@ -1113,7 +1129,8 @@ async function renderSearchInsights(container: HTMLElement): Promise<void> {
                   ${data.popular.map(
                     (row) =>
                       html`<li>
-                        ${row.query} — ${row.hits} חיפושים, ${row.averageResults} תוצאות בממוצע
+                        ${row.query} — כ־${formatCount(Math.round(row.hits / SEARCH.logSampleRate))}
+                        חיפושים, ${row.averageResults} תוצאות בממוצע
                       </li>`,
                   )}
                 </ul>`

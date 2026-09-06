@@ -144,7 +144,14 @@ describe('GET /api/videos', () => {
     // and unauthenticated, and a row per search let anyone mint a D1 write per
     // request by varying the query. Bounded by distinct searches per day, the
     // table cannot be used to spend the write budget.
-    const url = '/api/videos?q=' + encodeURIComponent('בלמים');
+    //
+    // A query with no results on purpose. Successful searches are sampled at
+    // `SEARCH.logSampleRate` to keep the write cost down, so asserting three
+    // hits from three successful searches would be asserting a dice roll;
+    // zero-result searches are always recorded, which is what makes this
+    // deterministic. The sampling itself is tested with an injected generator
+    // in `query-cost.test.ts`.
+    const url = '/api/videos?q=' + encodeURIComponent('משהו שאינו קיים בכלל');
     for (let attempt = 0; attempt < 3; attempt++) {
       await api.fetch(url);
       await api.drain();

@@ -26,6 +26,26 @@ export const SEARCH = {
   maxSuggestions: 7,
   /** Debounce before a keystroke turns into a request, in milliseconds. */
   suggestDebounceMs: 220,
+
+  /**
+   * Share of *successful* searches written to the analytics counter.
+   *
+   * A search that returned nothing is always logged: it is a gap in the
+   * catalog, and there is no way to recover the ones that were not recorded.
+   * A search that worked is a popularity signal, and a sample answers that as
+   * well as a census does at the resolution anyone reads it — a query searched
+   * a hundred times still lands at one in ten; one searched twice probably
+   * does not, and did not deserve a row.
+   *
+   * The reason to sample at all is the write budget: every logged search is an
+   * upsert, an upsert is a row written, and D1's free plan allows 100,000 a
+   * day across the whole account. At one in ten, search analytics costs a tenth
+   * of what it did.
+   *
+   * `hits` therefore counts sampled searches. Multiply by ten for the real
+   * figure — the admin screen does.
+   */
+  logSampleRate: 0.1,
 } as const;
 
 /** Tag lists shown in the filter panel. */

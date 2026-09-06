@@ -547,9 +547,11 @@ describe('what one search costs the write budget', () => {
     seedCatalog(db);
     const searches = new SearchRepository(db);
 
-    await searches.logSearch('מזגן ברכב', 4, null);
-    await searches.logSearch('מזגן ברכב', 4, null);
-    await searches.logSearch('משהו שאין', 0, null);
+    // `() => 0` always samples, so this measures the reports rather than the
+    // dice; the sampling itself is asserted below.
+    await searches.logSearch('מזגן ברכב', 4, null, () => 0);
+    await searches.logSearch('מזגן ברכב', 4, null, () => 0);
+    await searches.logSearch('משהו שאין', 0, null, () => 0);
 
     const popular = await searches.popularSearches('2000-01-01', 10);
     expect(popular[0]?.hits).toBe(2);
@@ -557,6 +559,42 @@ describe('what one search costs the write budget', () => {
     const zero = await searches.zeroResultSearches('2000-01-01', 10);
     expect(zero).toHaveLength(1);
     expect(zero[0]?.rawQuery).toBe('משהו שאין');
+
+    db.close();
+  });
+  /**
+   * The counter bounds the *table* by distinct queries per day. It does not
+   * bound the *writes*: a repeat is an UPDATE, and an UPDATE is a row written,
+   * so 50,000 searches were about 50,000 rows out of a daily budget of 100,000
+   * shared with everything else in the account.
+   *
+   * The two kinds of search are not worth the same, and this is the asymmetry
+   * that lets the cost drop by 90% without losing anything that matters: a
+   * search that found nothing is a gap in the catalog and is always recorded;
+   * a search that worked is a popularity signal, which a sample answers at the
+   * resolution anyone reads it.
+   */
+  it('samples successful searches and records every failed one', async () => {
+    const db = await createTestDatabase();
+    seedCatalog(db);
+    const searches = new SearchRepository(db);
+
+    // A roll above the rate: a successful search is dropped, a zero-result one
+    // is not.
+    const never = (): number => 0.99;
+    await searches.logSearch('מזגן ברכב', 4, null, never);
+    await searches.logSearch('משהו שאין בכלל', 0, null, never);
+
+    const rows = db.queryRaw<{ query: string }>(`SELECT query FROM search_query_daily`);
+    expect(rows).toHaveLength(1);
+
+    const zero = await searches.zeroResultSearches('2000-01-01', 10);
+    expect(zero).toHaveLength(1);
+    expect(zero[0]?.rawQuery).toBe('משהו שאין בכלל');
+
+    // A roll under the rate keeps the successful one too.
+    await searches.logSearch('מזגן ברכב', 4, null, () => 0);
+    expect(db.queryRaw(`SELECT 1 FROM search_query_daily`)).toHaveLength(2);
 
     db.close();
   });

@@ -49,6 +49,27 @@ export class MaintenanceRepository extends BaseRepository {
    * Videos already marked `removed` are skipped: an editor has decided about
    * those, and re-checking them forever would waste most of every run.
    */
+  /**
+   * Whether the catalog bootstrap is still adding files.
+   *
+   * The importer applies as many catalog files as the daily D1 write budget
+   * allows and records each in `catalog_import_log` with its UTC date, so a row
+   * dated today or yesterday means an import is still spread across days. The
+   * maintenance run uses it to stand the link checker down until the catalog is
+   * in — see `MaintenanceService.run`.
+   *
+   * One indexed read. `date('now', '-1 day')` rather than today alone: a deploy
+   * that spends the budget early leaves the next file for tomorrow, and a
+   * finished import stops writing rows entirely, so the window closes on its
+   * own a day after the last file lands.
+   */
+  async catalogImportedRecently(): Promise<boolean> {
+    const row = await this.first<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM catalog_import_log WHERE applied_on >= date('now', '-1 day')`,
+    );
+    return (row?.n ?? 0) > 0;
+  }
+
   async videosDueForCheck(limit: number): Promise<VideoToCheck[]> {
     // Ordered by when the video was last *attempted*, not last verified.
     //

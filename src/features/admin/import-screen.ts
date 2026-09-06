@@ -413,11 +413,22 @@ async function runImport(container: HTMLElement, state: State, redraw: () => voi
   const file = state.file;
   if (file == null || state.running) return;
 
-  const usable = file.rows
-    .map((values, index) => ({ rowNumber: index + 2, values }))
-    .filter((entry) => readRow(entry.values, state.mapping).ok);
+  // Every row, including the ones the preview marked as skippable.
+  //
+  // This used to filter to `readRow(...).ok` first, which quietly made the
+  // import report a report about a different file. The preview would say "470
+  // ready, 30 will be skipped", the 30 were dropped here, and the job recorded
+  // 470 rows with zero invalid — so the one artefact that explains why a
+  // spreadsheet did not import cleanly listed nothing wrong with it.
+  //
+  // The server was always the right place for this: it runs the same
+  // `readRow` on what it receives, puts the valid drafts through the import
+  // and writes the rest to `import_job_errors` with the field and the reason.
+  // Sending everything costs one row in that table per problem — which is the
+  // thing the editor came to read — and no video writes at all.
+  const all = file.rows.map((values, index) => ({ rowNumber: index + 2, values }));
 
-  if (usable.length === 0) return;
+  if (all.length === 0) return;
 
   state.running = true;
   const progress = select('[data-import-progress]', container);
@@ -431,12 +442,13 @@ async function runImport(container: HTMLElement, state: State, redraw: () => voi
     const job = await adminApi.createImport({
       filename: file.filename,
       format: file.format,
-      totalRows: usable.length,
+      // The file's real size, so "480 of 500" counts the way the editor does.
+      totalRows: all.length,
       mapping: state.mapping,
     });
 
-    for (let index = 0; index < usable.length; index += job.batchSize) {
-      const batch = usable.slice(index, index + job.batchSize);
+    for (let index = 0; index < all.length; index += job.batchSize) {
+      const batch = all.slice(index, index + job.batchSize);
 
       const outcome = await adminApi.importRows(job.id, {
         rows: batch,
@@ -450,19 +462,20 @@ async function runImport(container: HTMLElement, state: State, redraw: () => voi
       totals.failed += outcome.failed;
       totals.rejected += outcome.rejected;
 
-      const done = Math.min(index + job.batchSize, usable.length);
-      bar.setAttribute('style', `width:${String(Math.round((done / usable.length) * 100))}%`);
+      const done = Math.min(index + job.batchSize, all.length);
+      bar.setAttribute('style', `width:${String(Math.round((done / all.length) * 100))}%`);
       setHtml(
         text,
-        html`${formatCount(done)} מתוך ${formatCount(usable.length)} — נוספו
+        html`${formatCount(done)} מתוך ${formatCount(all.length)} — נוספו
         ${formatCount(totals.imported)}, עודכנו ${formatCount(totals.updated)}, דולגו
-        ${formatCount(totals.duplicates)}`,
+        ${formatCount(totals.duplicates)}, נפסלו ${formatCount(totals.rejected)}`,
       );
     }
 
     await adminApi.completeImport(job.id, 'completed');
     toastSuccess(
-      `הייבוא הסתיים: ${formatCount(totals.imported)} נוספו, ${formatCount(totals.updated)} עודכנו`,
+      `הייבוא הסתיים: ${formatCount(totals.imported)} נוספו, ${formatCount(totals.updated)} עודכנו` +
+        (totals.rejected > 0 ? `, ${formatCount(totals.rejected)} נפסלו` : ''),
     );
   } catch (cause) {
     toastError(cause instanceof Error ? cause.message : 'הייבוא נכשל');

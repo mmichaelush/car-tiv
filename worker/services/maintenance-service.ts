@@ -103,10 +103,31 @@ export class MaintenanceService {
   async run(env: Env): Promise<MaintenanceReport> {
     const started = Date.now();
 
-    const links = await this.#checkLinks().catch((cause: unknown) => {
-      this.#logger.warn('Link check failed', { error: describe(cause) });
-      return { checked: 0, broken: 0, recovered: 0 };
-    });
+    // The link check stands down while the catalog is still being imported.
+    //
+    // It is the only job here whose cost does not depend on anything having
+    // changed: it marks up to `LINK_CHECK_BATCH` rows as checked every hour
+    // whatever happens, which is a few thousand writes a day out of an
+    // account-wide budget of 100,000. That is affordable normally and is not
+    // affordable during a bootstrap, when the import needs every row it can
+    // get for four days and a video the checker has not looked at yet is not a
+    // problem — it has been in the database for minutes.
+    //
+    // Everything else in this run is already proportional to change: the
+    // counters write only what moved, the retention pass only deletes what has
+    // expired, and the reindex backlog is empty unless something failed.
+    const importing = await this.#catalogStillImporting();
+
+    const links = importing
+      ? { checked: 0, broken: 0, recovered: 0 }
+      : await this.#checkLinks().catch((cause: unknown) => {
+          this.#logger.warn('Link check failed', { error: describe(cause) });
+          return { checked: 0, broken: 0, recovered: 0 };
+        });
+
+    if (importing) {
+      this.#logger.info('Link check skipped: the catalog import is still in progress');
+    }
 
     const counters = await this.#counters.refreshAll().catch((cause: unknown) => {
       this.#logger.warn('Counter refresh failed', { error: describe(cause) });
@@ -149,6 +170,28 @@ export class MaintenanceService {
 
     this.#logger.info('maintenance', { ...report, environment: env.ENVIRONMENT });
     return report;
+  }
+
+  /**
+   * Whether a catalog import is still running across days.
+   *
+   * `catalog_import_log` holds one row per applied file and the deploy adds to
+   * it as the daily write budget allows, so "the newest row is from today or
+   * yesterday" is the same question as "is a bootstrap in progress". Two days
+   * rather than one because a deploy that fills a day's budget early leaves the
+   * next file for the following day, and an import that has genuinely finished
+   * stops adding rows altogether.
+   *
+   * Costs one indexed read per run and fails open: a database without the
+   * table — an older deployment, mid-migration — is treated as not importing,
+   * which is the behaviour this has always had.
+   */
+  async #catalogStillImporting(): Promise<boolean> {
+    try {
+      return await this.#repository.catalogImportedRecently();
+    } catch {
+      return false;
+    }
   }
 
   /**

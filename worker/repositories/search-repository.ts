@@ -161,9 +161,39 @@ export class SearchRepository extends BaseRepository {
    * form is stored alongside the raw text so spelling variants aggregate
    * together while an editor can still read what was actually typed.
    */
-  async logSearch(rawQuery: string, resultCount: number, category: string | null): Promise<void> {
+  async logSearch(
+    rawQuery: string,
+    resultCount: number,
+    category: string | null,
+    /**
+     * Injectable so a test can assert what is sampled rather than what it
+     * happened to roll. Production passes nothing.
+     */
+    random: () => number = Math.random,
+  ): Promise<void> {
     const trimmed = rawQuery.trim();
     if (trimmed.length < SEARCH.minQueryLength) return;
+
+    // Every search that found nothing; a sample of the ones that worked.
+    //
+    // The counter above bounds the *table* by distinct queries per day. It does
+    // not bound the *writes*: a repeat is an UPDATE, and an UPDATE is a row
+    // written, so 50,000 searches are still about 50,000 writes out of a daily
+    // budget of 100,000 shared with everything else in the account.
+    //
+    // The two kinds of search are not worth the same. A search that returned
+    // nothing is the whole point of this log — it is a gap in the catalog,
+    // someone looking for something that is not here, and missing one loses
+    // information that cannot be recovered. A search that worked is a
+    // popularity signal, and a popularity signal is exactly the kind of thing a
+    // sample answers as well as a census: at one in ten, a query searched a
+    // hundred times still lands, and one searched twice probably does not,
+    // which is the resolution this log is read at anyway.
+    //
+    // `hits` therefore counts sampled searches, not all of them. Multiply by
+    // `1 / SEARCH.logSampleRate` for an estimate of the real figure — the
+    // admin screen does, and says that it is doing it.
+    if (resultCount > 0 && random() >= SEARCH.logSampleRate) return;
 
     // A counter per (day, normalised query), not a row per search.
     //

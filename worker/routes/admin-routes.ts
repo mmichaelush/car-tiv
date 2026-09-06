@@ -401,10 +401,18 @@ async function maintenanceStatus(context: RequestContext): Promise<Response> {
  * import, and after an admin write. This endpoint is the fourth way, and it
  * exists for two moments:
  *
- *  * **After a first deploy.** A database that has been migrated and had its
- *    catalog imported by `scripts/import-catalog.ts` has every counter at zero
- *    until the cron first runs. The site works, but it looks empty. One call
- *    here fixes that in about 200ms.
+ *  * **Part-way through a bootstrap.** The catalog is imported over several
+ *    days — it costs 338,860 rows written and the free plan allows 100,000 a
+ *    day — and the refresh rides along as the last generated file, so the
+ *    counters are correct as of whatever has landed so far. A call here brings
+ *    them up to date between deploys, in about 200ms, without waiting for the
+ *    hourly cron.
+ *
+ *    (This used to say the counters sit at zero after a first deploy until the
+ *    cron runs. That stopped being true when `catalog:build` began emitting the
+ *    refresh as the import's last file — and an instruction to fix a problem
+ *    that no longer happens is how the next reader goes looking for a bug that
+ *    is not there.)
  *  * **When an editor thinks a number is wrong.** Being able to say "press
  *    this and see" is worth more than an explanation of the refresh schedule.
  *

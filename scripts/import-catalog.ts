@@ -81,8 +81,15 @@ async function main(): Promise<void> {
     console.log('ok');
   }
 
-  console.log('Done. Refresh the counters next — see docs/deployment.md step 5 —');
-  console.log('then check the admin dashboard.');
+  // No "refresh the counters next": `catalog:build` emits the refresh as the
+  // last file of every import, so it has just run. Saying otherwise sent people
+  // to run a step that was already done.
+  console.log("Done — counters refreshed by the import's last file.");
+  console.log('');
+  console.log('This applies every file in one go, which is right for a local');
+  console.log('database and wrong for a remote one: the full catalog is 338,860');
+  console.log("rows written and D1's free plan allows 100,000 a day. Deploys use");
+  console.log('scripts/ci-database.ts, which paces the import across days.');
 }
 
 function readTarget(): TargetName {
