@@ -124,6 +124,7 @@
       },
       "vars": {
         "ENVIRONMENT": "production",
+        "CACHE_VERSION": "catalog-20260917",
         // The custom domain, once there is one — see the note on caching in
         // docs/performance.md and the checklist in docs/deployment.md. Until
         // then, the full workers.dev address including the account subdomain:
@@ -144,7 +145,7 @@
         {
           "binding": "DB",
           "database_name": "car-tiv",
-          "database_id": "REPLACE_WITH_PRODUCTION_D1_ID",
+          "database_id": "b81bb8d9-1ebc-47b1-903f-46c8dc51d12f",
           "migrations_dir": "migrations",
         },
       ],
