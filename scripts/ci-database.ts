@@ -110,10 +110,27 @@ function failed(reason: string): void {
   FAILURES.push(reason);
 }
 
+/** Execute installed CLIs directly: Windows cannot spawn npm.cmd without a shell. */
+function cli(command: string, args: readonly string[]): [string, string[]] {
+  if (command === 'npx' && args[0] === 'wrangler') {
+    return [
+      process.execPath,
+      [path.join(ROOT, 'node_modules/wrangler/bin/wrangler.js'), ...args.slice(1)],
+    ];
+  }
+  if (command === 'npm') {
+    const npmCli = process.env.npm_execpath;
+    if (npmCli == null) throw new Error('Run this script through npm run db:ci');
+    return [process.execPath, [npmCli.replace(/npx-cli\.js$/, 'npm-cli.js'), ...args]];
+  }
+  return [command, [...args]];
+}
+
 /** Run a command, streaming its output, and resolve with its exit code. */
 function run(command: string, args: readonly string[]): Promise<number> {
   return new Promise((resolve) => {
-    const child = spawn(command, [...args], { cwd: ROOT, stdio: 'inherit', shell: false });
+    const [executable, arguments_] = cli(command, args);
+    const child = spawn(executable, arguments_, { cwd: ROOT, stdio: 'inherit', shell: false });
     child.on('close', (code) => {
       resolve(code ?? 1);
     });
@@ -128,7 +145,8 @@ const wrangler = (args: readonly string[]): Promise<number> => run('npx', ['wran
 /** The same, capturing stdout instead of streaming it. */
 function capture(command: string, args: readonly string[]): Promise<{ code: number; out: string }> {
   return new Promise((resolve) => {
-    const child = spawn(command, [...args], { cwd: ROOT, shell: false });
+    const [executable, arguments_] = cli(command, args);
+    const child = spawn(executable, arguments_, { cwd: ROOT, shell: false });
     let out = '';
     child.stdout.on('data', (chunk: Buffer) => (out += chunk.toString()));
     child.stderr.on('data', (chunk: Buffer) => (out += chunk.toString()));
@@ -307,9 +325,9 @@ async function main(): Promise<void> {
         '  If this says the token lacks permission, the build token has no D1\n' +
         '  access — apply the schema once from a machine that can reach the\n' +
         '  Cloudflare API, or add D1 to the token in the dashboard.\n' +
-        '  The deploy continues; the Worker will report a database error until\n' +
-        '  the schema exists.',
+        '  Deployment is stopped until the schema can be applied.',
     );
+    failed('database migrations could not be applied');
     return;
   }
 
@@ -331,6 +349,7 @@ async function main(): Promise<void> {
   // report — no categories, therefore no video can name one — look exactly
   // like success right up until the site rendered empty.
   if (seeded !== 0) {
+    failed('reference rows could not be loaded');
     console.error(
       '\n⚠ The reference rows did not load.\n' +
         '  Categories, home sections and feature flags come from this file, and the\n' +

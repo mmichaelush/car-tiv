@@ -30,6 +30,10 @@ jobs:
       - name: Types
         run: npm run typecheck
 
+      # Full-catalog tests must run on clean CI checkouts, not silently skip.
+      - name: Catalog SQL
+        run: npm run catalog:build
+
       - name: Tests
         run: npm test
 
