@@ -25,6 +25,9 @@ interface CategoryRow {
 }
 
 interface ChannelRow {
+  sourceId: string | null;
+  netfreeOpen: number | null;
+  hasHebrewVideos: number | null;
   id: number;
   slug: string;
   name: string;
@@ -128,7 +131,7 @@ export class CatalogRepository extends BaseRepository {
     const limit = clampLimit(options.limit ?? PAGINATION.defaultLimit);
 
     const conditions = new ConditionBuilder().add('ch.is_visible = 1');
-    conditions.addIf(options.featuredOnly === true, 'ch.is_featured = 1');
+    conditions.addIf(options.featuredOnly === true, 'ch.netfree_open = 1');
     conditions.addIf(
       options.q != null && options.q.length > 0,
       'ch.name LIKE ? ESCAPE ' + String.raw`'\'`,
@@ -145,6 +148,8 @@ export class CatalogRepository extends BaseRepository {
       `SELECT ch.id, ch.slug, ch.name, ch.description,
               ch.image_url AS imageUrl, ch.youtube_url AS youtubeUrl,
               ch.youtube_channel_id AS youtubeChannelId,
+              ch.source_id AS sourceId, ch.netfree_open AS netfreeOpen,
+              ch.has_hebrew_videos AS hasHebrewVideos,
               ch.is_featured AS isFeatured, ch.is_visible AS isVisible,
               ch.video_count AS videoCount
        FROM channels ch
@@ -194,6 +199,8 @@ export class CatalogRepository extends BaseRepository {
       `SELECT ch.id, ch.slug, ch.name, ch.description,
               ch.image_url AS imageUrl, ch.youtube_url AS youtubeUrl,
               ch.youtube_channel_id AS youtubeChannelId,
+              ch.source_id AS sourceId, ch.netfree_open AS netfreeOpen,
+              ch.has_hebrew_videos AS hasHebrewVideos,
               ch.is_featured AS isFeatured, ch.is_visible AS isVisible,
               ch.video_count AS videoCount
        FROM channels ch
@@ -348,26 +355,9 @@ export class CatalogRepository extends BaseRepository {
   }
 }
 
-/**
- * `channels.is_featured` means "this channel's YouTube page opens in NetFree".
- *
- * It was populated from `data/featured_channels.json`, the old site's list of
- * channels whose *homepage* — not just the individual videos — is reachable
- * behind the filter. It was rendered as a "מומלץ" badge, which said something
- * the data does not mean and implied the other channels were worse.
- *
- * Two things follow from it, and nothing else:
- *
- *   * The channels directory lists only these. Sending someone to a channel
- *     page whose every outward link is blocked is a dead end.
- *   * `youtubeUrl` is withheld for the rest. A direct link to any channel still
- *     works and still lists that channel's videos — those play fine — but there
- *     is no button offering a page the visitor cannot open. Withheld here, in
- *     the one place a channel is built, rather than in each template that might
- *     forget.
- */
+/** Map explicit import metadata independently of recommendation status. */
 function toChannel(row: ChannelRow): Channel {
-  const netfreeOpen = toBoolean(row.isFeatured);
+  const netfreeOpen = row.netfreeOpen == null ? null : toBoolean(row.netfreeOpen);
 
   return {
     id: row.id,
@@ -375,9 +365,12 @@ function toChannel(row: ChannelRow): Channel {
     name: row.name,
     description: row.description,
     imageUrl: row.imageUrl,
-    youtubeUrl: netfreeOpen ? row.youtubeUrl : null,
+    youtubeUrl: row.youtubeUrl,
+    sourceId: row.sourceId,
+    netfreeOpen,
+    hasHebrewVideos: row.hasHebrewVideos == null ? null : toBoolean(row.hasHebrewVideos),
     youtubeChannelId: row.youtubeChannelId,
-    isFeatured: netfreeOpen,
+    isFeatured: toBoolean(row.isFeatured),
     isVisible: toBoolean(row.isVisible),
     videoCount: row.videoCount,
   };

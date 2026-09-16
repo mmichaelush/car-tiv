@@ -64,6 +64,11 @@ void catalog
           </h1>
           <p>${channel.description}</p>
           <p class="channel-card__meta">
+            ${channel.netfreeOpen === true ? 'פתוח בנטפרי' : channel.netfreeOpen === false ? 'לא פתוח בנטפרי' : 'סטטוס נטפרי לא ידוע'}
+            ·
+            ${channel.hasHebrewVideos === true ? 'כולל סרטונים בעברית' : channel.hasHebrewVideos === false ? 'ללא סרטונים בעברית' : 'זמינות עברית לא ידועה'}
+          </p>
+          <p class="channel-card__meta">
             ${channel.videoCount == null ? '' : `${countLabel(channel.videoCount, 'סרטון', 'סרטונים')} במאגר`}
           </p>
           ${

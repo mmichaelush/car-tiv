@@ -142,6 +142,7 @@ export function videoCard(video: VideoSummary, options: CardOptions = {}): SafeH
             <p class="video-card__topline">
               <span class="video-card__category">${video.categoryName}</span>
               ${publishedLabel(video)}
+              ${video.netfreeOpen == null ? '' : html`<span class="badge">${video.netfreeOpen ? 'פתוח בנטפרי' : 'לא פתוח בנטפרי'}</span>`}
             </p>
           `
         }

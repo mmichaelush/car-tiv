@@ -119,6 +119,11 @@ function render(channels: readonly Channel[], meta: PageMeta): void {
             </h3>
             <p>${channel.description}</p>
             <p class="channel-card__meta">
+              ${channel.netfreeOpen === true ? 'פתוח בנטפרי' : channel.netfreeOpen === false ? 'לא פתוח בנטפרי' : 'סטטוס נטפרי לא ידוע'}
+              ·
+              ${channel.hasHebrewVideos === true ? 'כולל סרטונים בעברית' : channel.hasHebrewVideos === false ? 'ללא סרטונים בעברית' : 'זמינות עברית לא ידועה'}
+            </p>
+            <p class="channel-card__meta">
               ${
                 // No "מומלץ". Every channel in this catalog is one whose videos
                 // passed the same check, so a badge on some of them says nothing

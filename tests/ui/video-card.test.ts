@@ -19,6 +19,7 @@ import {
 import { html, setHtml } from '@src/ui/dom.js';
 
 const video = (overrides: Partial<VideoSummary> = {}): VideoSummary => ({
+  netfreeOpen: null,
   id: 'corolla0001' as VideoId,
   title: 'החלפת שמן בטויוטה קורולה',
   categoryId: 'maintenance',

@@ -115,6 +115,35 @@ async function main(): Promise<void> {
   await mkdir(OUT_DIR, { recursive: true });
 
   const channelsBySlug = new Map(result.channels.map((channel) => [channel.slug, channel]));
+  const registry = JSON.parse(
+    await readFile(path.join(DATA_DIR, 'featured_channels.json'), 'utf8'),
+  ) as {
+    channels: {
+      id: string;
+      channel_name: string;
+      channel_url: string;
+      youtubeChannelId?: string;
+      netfreeOpen: boolean;
+      hasHebrewVideos: boolean;
+      channel_image_url?: string;
+      content_description?: string;
+    }[];
+  };
+  const snapshotChannels = registry.channels.map((source, index) => ({
+    id: index + 1,
+    slug: source.id,
+    sourceId: source.id,
+    name: source.channel_name,
+    description: source.content_description ?? '',
+    imageUrl: source.channel_image_url ?? null,
+    youtubeUrl: source.channel_url,
+    youtubeChannelId: source.youtubeChannelId ?? null,
+    netfreeOpen: source.netfreeOpen,
+    hasHebrewVideos: source.hasHebrewVideos,
+    isFeatured: source.netfreeOpen,
+    isVisible: true,
+    videoCount: channelsBySlug.get(source.id)?.videoCount ?? 0,
+  }));
   const categoryNames = new Map(CATEGORIES.map((category) => [category.id, category.name]));
 
   // Newest first, so page 1 of the snapshot matches page 1 of the live site.
@@ -134,19 +163,8 @@ async function main(): Promise<void> {
   });
 
   await write('channels.json', {
-    data: result.channels.map((channel, index) => ({
-      id: index + 1,
-      slug: channel.slug,
-      name: channel.name,
-      description: '',
-      imageUrl: channel.imageUrl,
-      youtubeUrl: null,
-      youtubeChannelId: null,
-      isFeatured: false,
-      isVisible: true,
-      videoCount: channel.videoCount,
-    })),
-    meta: { count: result.channels.length },
+    data: snapshotChannels,
+    meta: { count: snapshotChannels.length },
     error: null,
   });
 
@@ -180,7 +198,7 @@ async function main(): Promise<void> {
   await write('index.json', {
     generatedAt: new Date().toISOString(),
     videos: summaries.length,
-    channels: result.channels.length,
+    channels: snapshotChannels.length,
     categories: CATEGORIES.length,
     pageSize: PAGE_SIZE,
     pages,
@@ -190,7 +208,7 @@ async function main(): Promise<void> {
   console.log('  Static catalog snapshot');
   console.log('  ────────────────────────────────');
   console.log(`  videos       ${String(summaries.length)}`);
-  console.log(`  channels     ${String(result.channels.length)}`);
+  console.log(`  channels     ${String(snapshotChannels.length)}`);
   console.log(`  catalog pages ${String(pages)} (${String(PAGE_SIZE)} per file)`);
   console.log(`  written to   public/static-data/`);
   console.log('');
@@ -220,6 +238,7 @@ function toSummary(
     publishedAt: video.publishedAt,
     thumbnailUrl: null,
     isHebrew: video.isHebrew,
+    netfreeOpen: video.netfreeOpen,
     isFeatured: false,
     tags: video.tagSlugs.slice(0, 6),
   };

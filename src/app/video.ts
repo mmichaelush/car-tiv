@@ -199,6 +199,7 @@ function renderDetail(video: VideoDetail): void {
             ? html`<span title="${describeDuration(video.durationSeconds)}">${duration}</span>`
             : ''
         }
+        ${video.netfreeOpen == null ? '' : html`<span class="badge">${video.netfreeOpen ? 'פתוח בנטפרי' : 'לא פתוח בנטפרי'}</span>`}
         ${video.isHebrew ? html`<span class="badge">עברית</span>` : html`<span class="badge">אנגלית</span>`}
       </div>
 

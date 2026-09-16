@@ -33,8 +33,11 @@ function catalogFiles(): string[] {
     .sort();
 }
 
-function applyAll(db: DatabaseSync): void {
-  for (const file of catalogFiles()) db.exec(readFileSync(path.join(CATALOG, file), 'utf8'));
+async function applyAll(db: DatabaseSync): Promise<void> {
+  for (const file of catalogFiles()) {
+    db.exec(readFileSync(path.join(CATALOG, file), 'utf8'));
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
 }
 
 function count(db: DatabaseSync, table: string): number {
@@ -55,9 +58,9 @@ whenBuilt('the generated catalog', () => {
    * document per video and every search that matched one returned it twice.
    * This is the test that would have caught it.
    */
-  it('applies twice with no duplicates and no changes', () => {
+  it('applies twice with no duplicates and no changes', async () => {
     const db = schema();
-    applyAll(db);
+    await applyAll(db);
 
     const tables = [
       'videos',
@@ -85,19 +88,19 @@ whenBuilt('the generated catalog', () => {
       );
     const before = fingerprint();
 
-    applyAll(db);
+    await applyAll(db);
 
     const second = Object.fromEntries(tables.map((table) => [table, count(db, table)]));
 
     expect(second).toEqual(first);
     expect(fingerprint()).toBe(before);
     db.close();
-  });
+  }, 120_000);
 
-  it('indexes every video exactly once for search', () => {
+  it('indexes every video exactly once for search', async () => {
     const db = schema();
-    applyAll(db);
-    applyAll(db);
+    await applyAll(db);
+    await applyAll(db);
 
     const videos = count(db, 'videos');
     const documents = count(db, 'videos_fts');
@@ -112,7 +115,7 @@ whenBuilt('the generated catalog', () => {
       .all();
     expect(duplicated).toEqual([]);
     db.close();
-  });
+  }, 120_000);
 
   it('costs more than one day of the free plan, and the manifest says so', () => {
     // Not a limit to enforce — a fact to keep visible. The import was written

@@ -95,6 +95,37 @@ afterEach(() => {
   db.close();
 });
 
+it('retains explicit false NetFree metadata and source channel identity in an admin import', async () => {
+  const jobId = await openJob();
+  const { status } = await api.json(
+    `/api/admin/imports/${jobId}/rows`,
+    postJson(
+      {
+        mapping: { ...MAPPING, netfreeOpen: 'open', channelSourceId: 'source' },
+        options: options(),
+        rows: [
+          sheetRow(2, {
+            link: 'https://youtu.be/netfree0001',
+            title: 'Metadata test',
+            cat: 'maintenance',
+            channel: 'Identity test',
+            source: 'channel_final_test',
+            open: 'false',
+            len: '10:00',
+            tags: '',
+          }),
+        ],
+      },
+      staff,
+    ),
+  );
+  expect(status).toBe(200);
+  expect(
+    db.queryRaw(`SELECT v.netfree_open, c.source_id FROM videos v JOIN channels c ON c.id=v.channel_id
+    WHERE v.id='netfree0001'`),
+  ).toEqual([{ netfree_open: 0, source_id: 'channel_final_test' }]);
+});
+
 describe('access control', () => {
   it('refuses every import endpoint without a staff credential', async () => {
     expect((await api.fetch('/api/admin/imports')).status).toBe(401);

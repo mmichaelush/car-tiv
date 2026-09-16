@@ -70,7 +70,12 @@ export interface CatalogManifest {
  * depends on the tokenizer, the text and the segment merges FTS5 decides to
  * do, and no constant would survive a change to any of them.
  */
-const FTS_SHADOW = ['videos_fts_data', 'videos_fts_idx', 'videos_fts_docsize'];
+const FTS_SHADOW = [
+  'videos_fts_data',
+  'videos_fts_idx',
+  'videos_fts_docsize',
+  'videos_fts_content',
+];
 
 /**
  * The schema and the reference rows, which is the state a catalog import
@@ -132,37 +137,58 @@ export function measure(): CatalogManifest {
 
   const results: CatalogFileCost[] = [];
   let before = rowCounts(db, watched);
-
-  for (const file of files) {
-    db.exec(readFileSync(path.join(CATALOG, file), 'utf8'));
-    const after = rowCounts(db, watched);
-
-    const tables: Record<string, number> = {};
-    let logical = 0;
-    let written = 0;
-
-    for (const table of watched) {
-      const added = (after.get(table) ?? 0) - (before.get(table) ?? 0);
-      if (added <= 0) continue;
-      tables[table] = added;
-
-      if (FTS_SHADOW.includes(table)) {
-        // Shadow rows are already the physical rows; they are not multiplied
-        // again, and they are not "logical" rows anyone asked to store.
-        written += added;
-      } else {
-        logical += added;
-        written += added * (perIndex.get(table) ?? 1);
-      }
+  const mutations = new Map<string, number>();
+  db.function('audit_catalog_write', (table) => {
+    const name = String(table);
+    mutations.set(name, (mutations.get(name) ?? 0) + 1);
+    return 0;
+  });
+  for (const table of perIndex.keys()) {
+    for (const action of ['INSERT', 'UPDATE', 'DELETE']) {
+      db.exec(`CREATE TEMP TRIGGER audit_${table}_${action} AFTER ${action} ON "${table}"
+        BEGIN SELECT audit_catalog_write('${table}'); END;`);
     }
+  }
+  const totalChanges = (): number =>
+    Number((db.prepare('SELECT total_changes() AS n').get() as { n: number }).n);
 
-    results.push({
-      file,
-      logicalRows: logical,
-      estimatedRowsWritten: written,
-      tables,
-    });
-    before = after;
+  for (const pass of [0, 1]) {
+    for (const file of files) {
+      mutations.clear();
+      const changesBefore = totalChanges();
+      db.exec(readFileSync(path.join(CATALOG, file), 'utf8'));
+      const after = rowCounts(db, watched);
+
+      const tables: Record<string, number> = {};
+      let logical = 0;
+      let written = 0;
+
+      for (const [table, changed] of mutations) {
+        tables[table] = changed;
+        logical += changed;
+        written += changed * (perIndex.get(table) ?? 1);
+      }
+      // SQLite total_changes includes FTS shadow mutations, including rewrites
+      // and deletes which net table-size growth cannot measure.
+      const shadowWrites = Math.max(0, totalChanges() - changesBefore - logical);
+      written += shadowWrites;
+      for (const table of FTS_SHADOW) {
+        tables[table] = Math.max(0, (after.get(table) ?? 0) - (before.get(table) ?? 0));
+      }
+
+      const measured = {
+        file,
+        logicalRows: logical,
+        estimatedRowsWritten: written,
+        tables,
+      };
+      if (pass === 0) results.push(measured);
+      else {
+        const index = results.findIndex((entry) => entry.file === file);
+        if (written > (results[index]?.estimatedRowsWritten ?? 0)) results[index] = measured;
+      }
+      before = after;
+    }
   }
 
   db.close();

@@ -47,6 +47,9 @@ export interface Category {
 
 /** A YouTube channel represented in the catalog. */
 export interface Channel {
+  readonly sourceId: string | null;
+  readonly netfreeOpen: boolean | null;
+  readonly hasHebrewVideos: boolean | null;
   readonly id: number;
   readonly slug: ChannelSlug;
   readonly name: string;
@@ -98,6 +101,7 @@ export interface VideoChannelRef {
  * Everything a card needs to render, and nothing more.
  */
 export interface VideoSummary {
+  readonly netfreeOpen: boolean | null;
   readonly id: VideoId;
   readonly title: string;
   readonly categoryId: CategoryId;

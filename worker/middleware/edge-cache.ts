@@ -144,11 +144,6 @@ const PRIVATE_PREFIXES = ['/api/me', '/api/auth', '/api/admin'] as const;
 export function cacheKeyFor(request: Request, url: URL, version: string): string | null {
   if (request.method !== 'GET') return null;
 
-  // A caller that explicitly asked for fresh data gets it. This is what lets
-  // the admin see an edit immediately without waiting for a TTL.
-  const control = request.headers.get('cache-control') ?? '';
-  if (control.includes('no-cache') || control.includes('no-store')) return null;
-
   const path = url.pathname.replace(/\/+$/, '') || '/';
 
   // Whole subtrees that are per-visitor by definition. Their handlers all
@@ -194,8 +189,8 @@ export function isCacheable(response: Response): boolean {
 /**
  * Serve `produce()` through the cache.
  *
- * A miss stores the response after it has been sent, via `waitUntil`, so a
- * visitor never waits for the write.
+ * Concurrent anonymous misses share one producer and cache write per isolate.
+ * Cookie-bearing responses and private requests are never shared.
  *
  * ## Where the cache does nothing
  *
@@ -214,6 +209,31 @@ export function isCacheable(response: Response): boolean {
  * `docs/deployment.md` has this as a checklist item, because on a free plan the
  * difference is the whole read budget.
  */
+const inFlight = new Map<string, Promise<Response | null>>();
+const STALE_REFERENCE_PATHS = new Set(['/api/categories', '/api/tags', '/api/stats']);
+const FRESH_UNTIL = 'x-cartiv-fresh-until';
+const ORIGINAL_CONTROL = 'x-cartiv-original-control';
+
+function cacheCopy(response: Response, path: string): Response {
+  const copy = response.clone();
+  if (!STALE_REFERENCE_PATHS.has(path)) return copy;
+  const control = response.headers.get('cache-control') ?? '';
+  const ttl = Number(/s-maxage=(\d+)/.exec(control)?.[1] ?? 0);
+  copy.headers.set(FRESH_UNTIL, String(Date.now() + ttl * 1000));
+  copy.headers.set(ORIGINAL_CONTROL, control);
+  copy.headers.set('cache-control', `public, max-age=${String(ttl + 60)}`);
+  return copy;
+}
+
+function clientCopy(response: Response): Response {
+  const copy = new Response(response.body, response);
+  const control = copy.headers.get(ORIGINAL_CONTROL);
+  if (control != null) copy.headers.set('cache-control', control);
+  copy.headers.delete(FRESH_UNTIL);
+  copy.headers.delete(ORIGINAL_CONTROL);
+  return copy;
+}
+
 export async function withEdgeCache(
   request: Request,
   url: URL,
@@ -228,17 +248,53 @@ export async function withEdgeCache(
   if (cache == null) return { response: await produce(), hit: false };
 
   const cached = await cache.match(key).catch(() => undefined);
-  if (cached != null) return { response: cached, hit: true };
-
-  const response = await produce();
-  if (isCacheable(response)) {
-    // `put` consumes the body, so the copy going into the cache is the clone
-    // and the original is what the visitor receives.
-    const copy = response.clone();
-    waitUntil(cache.put(key, copy).catch(() => undefined));
+  const anonymous = !request.headers.has('cookie') && !request.headers.has('authorization');
+  const freshUntil = Number(cached?.headers.get(FRESH_UNTIL) ?? 0);
+  if (cached != null && (freshUntil === 0 || Date.now() <= freshUntil + 60_000)) {
+    if (
+      anonymous &&
+      freshUntil > 0 &&
+      Date.now() > freshUntil &&
+      !inFlight.has(key) &&
+      inFlight.size < 256
+    ) {
+      const refresh = (async (): Promise<Response | null> => {
+        const response = await produce();
+        if (!isCacheable(response)) return null;
+        await cache.put(key, cacheCopy(response, url.pathname));
+        return response;
+      })();
+      inFlight.set(key, refresh);
+      waitUntil(refresh.catch(() => undefined).finally(() => inFlight.delete(key)));
+    }
+    return { response: clientCopy(cached), hit: true };
   }
 
-  return { response, hit: false };
+  const pending = anonymous ? inFlight.get(key) : undefined;
+  if (pending != null) {
+    const shared = await pending;
+    // A personal response or a failure must never be shared between callers.
+    if (shared != null) return { response: shared.clone(), hit: true };
+    return { response: await produce(), hit: false };
+  }
+
+  let response: Response | undefined;
+  const work = (async (): Promise<Response | null> => {
+    response = await produce();
+    if (!isCacheable(response)) return null;
+    await cache.put(key, cacheCopy(response, url.pathname)).catch(() => undefined);
+    return response.clone();
+  })();
+  const tracked = anonymous && inFlight.size < 256;
+  if (tracked) inFlight.set(key, work);
+  waitUntil(work.catch(() => undefined));
+  try {
+    await work;
+    if (response == null) throw new Error('Cache producer returned no response');
+    return { response, hit: false };
+  } finally {
+    if (tracked) inFlight.delete(key);
+  }
 }
 
 /**

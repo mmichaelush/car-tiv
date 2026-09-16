@@ -191,8 +191,28 @@ export class ConditionBuilder {
 }
 
 /** Base class holding the database handle and the error translation. */
+export interface QueryMetrics {
+  queries: number;
+  rowsRead: number;
+  rowsWritten: number;
+  databaseMs: number;
+}
+
 export abstract class BaseRepository {
   protected readonly db: D1Database;
+  #metrics: QueryMetrics | null = null;
+
+  observe(metrics: QueryMetrics): void {
+    this.#metrics = metrics;
+  }
+
+  #record(result: D1Result): void {
+    if (this.#metrics == null) return;
+    this.#metrics.queries += 1;
+    this.#metrics.rowsRead += result.meta.rows_read ?? 0;
+    this.#metrics.rowsWritten += result.meta.rows_written ?? 0;
+    this.#metrics.databaseMs += result.meta.duration ?? 0;
+  }
 
   constructor(db: D1Database) {
     this.db = db;
@@ -203,6 +223,7 @@ export abstract class BaseRepository {
     try {
       const statement = this.db.prepare(sql).bind(...bindings);
       const result = await statement.all<TRow>();
+      this.#record(result);
       return result.results;
     } catch (cause) {
       throw wrap(cause, sql);
@@ -215,10 +236,12 @@ export abstract class BaseRepository {
     bindings: readonly Binding[] = [],
   ): Promise<TRow | null> {
     try {
-      return await this.db
+      const result = await this.db
         .prepare(sql)
         .bind(...bindings)
-        .first<TRow>();
+        .all<TRow>();
+      this.#record(result);
+      return result.results[0] ?? null;
     } catch (cause) {
       throw wrap(cause, sql);
     }
@@ -236,10 +259,12 @@ export abstract class BaseRepository {
   /** Run a statement for its effect. */
   protected async run(sql: string, bindings: readonly Binding[] = []): Promise<D1Result> {
     try {
-      return await this.db
+      const result = await this.db
         .prepare(sql)
         .bind(...bindings)
         .run();
+      this.#record(result);
+      return result;
     } catch (cause) {
       throw wrap(cause, sql);
     }
@@ -268,11 +293,13 @@ export abstract class BaseRepository {
   ): Promise<D1Result[]> {
     if (statements.length === 0) return [];
     try {
-      return await this.db.batch(
+      const results = await this.db.batch(
         statements.map((statement) =>
           this.db.prepare(statement.sql).bind(...(statement.bindings ?? [])),
         ),
       );
+      for (const result of results) this.#record(result);
+      return results;
     } catch (cause) {
       throw wrap(cause, statements[0]?.sql ?? '');
     }

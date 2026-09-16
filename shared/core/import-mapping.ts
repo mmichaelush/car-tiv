@@ -28,6 +28,8 @@ export const IMPORT_FIELDS = [
   'duration',
   'addedAt',
   'isHebrew',
+  'netfreeOpen',
+  'channelSourceId',
 ] as const;
 
 export type ImportField = (typeof IMPORT_FIELDS)[number];
@@ -47,6 +49,8 @@ const HEADER_HINTS: Readonly<Record<ImportField, readonly string[]>> = {
   duration: ['duration', 'length', 'אורך', 'משך', 'זמן'],
   addedAt: ['date', 'dateadded', 'date added', 'added', 'תאריך', 'תאריך הוספה'],
   isHebrew: ['hebrew', 'hebrewcontent', 'is hebrew', 'עברית', 'בעברית'],
+  netfreeOpen: ['netfreeopen', 'netfree open', 'פתוח בנטפרי'],
+  channelSourceId: ['channelid', 'channel source id', 'מזהה ערוץ'],
 };
 
 /**
@@ -97,6 +101,8 @@ export interface ImportDraft {
   readonly durationSeconds: number;
   readonly addedAt: string | null;
   readonly isHebrew: boolean;
+  readonly netfreeOpen?: boolean | null;
+  readonly channelSourceId?: string;
 }
 
 export interface RowProblem {
@@ -170,6 +176,8 @@ export function readRow(row: Record<string, string>, mapping: ColumnMapping): Ro
       durationSeconds: parseDuration(value('duration')) ?? 0,
       addedAt: parsedDate,
       isHebrew: readBoolean(value('isHebrew')),
+      netfreeOpen: value('netfreeOpen').length === 0 ? null : readBoolean(value('netfreeOpen')),
+      channelSourceId: value('channelSourceId'),
     },
   };
 }

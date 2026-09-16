@@ -39,6 +39,16 @@ export class MaintenanceRepository extends BaseRepository {
     super(db);
   }
 
+  /** Atomic claim per scheduled hour; duplicate deliveries perform no maintenance. */
+  async claimSlot(scheduledTime: number): Promise<boolean> {
+    const slot = Math.floor(scheduledTime / 3_600_000);
+    const result = await this.run(
+      "UPDATE catalog_counters SET value = ? WHERE key = 'maintenance.cronSlot' AND value < ?",
+      [slot, slot],
+    );
+    return Number(result.meta.changes) === 1;
+  }
+
   /**
    * The next slice of videos to verify.
    *
@@ -81,10 +91,10 @@ export class MaintenanceRepository extends BaseRepository {
     // busy and healthy while doing nothing useful.
     return this.all<VideoToCheck>(
       `SELECT id, status, check_failures AS checkFailures
-       FROM videos
+       FROM videos INDEXED BY idx_videos_check_queue
        WHERE deleted_at IS NULL
          AND status IN ('published', 'broken', 'hidden')
-       ORDER BY last_attempted_at IS NOT NULL, last_attempted_at
+       ORDER BY last_attempted_at
        LIMIT ?`,
       [limit],
     );

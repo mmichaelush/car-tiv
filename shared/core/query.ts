@@ -91,7 +91,7 @@ export function serializeQuery(query: VideoQuery): URLSearchParams {
   if (query.q.length > 0) params.set('q', query.q);
   if (query.category !== 'all') params.set('category', query.category);
   if (query.channel != null) params.set('channel', query.channel);
-  if (query.tags.length > 0) params.set('tags', [...query.tags].join(','));
+  if (query.tags.length > 0) params.set('tags', [...query.tags].sort().join(','));
   if (query.ids.length > 0) params.set('ids', [...query.ids].join(','));
   if (query.manufacturer != null) params.set('manufacturer', query.manufacturer);
   if (query.model != null) params.set('model', query.model);

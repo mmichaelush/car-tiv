@@ -23,6 +23,11 @@ import { appOrigin } from './env.js';
 import { handleErrors } from './middleware/error-handler.js';
 import { withSecurityHeaders } from './middleware/security-headers.js';
 import { withEdgeCache } from './middleware/edge-cache.js';
+import {
+  consumeCatalogBudget,
+  expensiveCatalogPath,
+  invalidCatalogQuery,
+} from './middleware/catalog-budget.js';
 import { fail, permanentRedirect } from './lib/response.js';
 import { router } from './routes/index.js';
 import { MaintenanceService } from './services/maintenance-service.js';
@@ -63,14 +68,20 @@ const handler = {
     );
 
     executionContext.waitUntil(
-      new MaintenanceService(
-        context.repositories.maintenance,
-        context.repositories.counters,
-        context.repositories.searchIndex,
-        context.logger,
-      )
-        .run(env)
-        .then(() => undefined)
+      context.repositories.maintenance
+        .claimSlot(event.scheduledTime)
+        .then(async (claimed) => {
+          if (!claimed) return;
+          await new MaintenanceService(
+            context.repositories.maintenance,
+            context.repositories.counters,
+            context.repositories.searchIndex,
+            context.logger,
+          )
+            .run(env)
+            .then(() => undefined);
+          context.logger.info('maintenance-cost', { ...context.queryMetrics });
+        })
         .catch((cause: unknown) => {
           context.logger.error('Scheduled maintenance failed', {
             cron: event.cron,
@@ -87,6 +98,8 @@ const handler = {
 
     // --- 1. API -----------------------------------------------------------
     if (url.pathname === '/api' || url.pathname.startsWith('/api/')) {
+      const invalid = invalidCatalogQuery(url);
+      if (invalid != null) return invalid;
       // A cache hit answers without touching D1 at all. This is the difference
       // between a page view costing thousands of rows read and costing none;
       // see `worker/middleware/edge-cache.ts` for why `s-maxage` alone was not
@@ -100,6 +113,14 @@ const handler = {
         },
         () =>
           handleErrors(async () => {
+            if (
+              expensiveCatalogPath(url.pathname) &&
+              !consumeCatalogBudget(await context.callerFingerprint())
+            ) {
+              return fail(429, ERROR_CODES.rateLimited, 'נשלחו יותר מדי בקשות. נסו שוב בעוד דקה', {
+                headers: { 'retry-after': '60' },
+              });
+            }
             // Who is calling, before any route runs. Costs nothing without a
             // session cookie, which is the overwhelming majority of requests.
             await resolveAccount(context);
@@ -119,6 +140,7 @@ const handler = {
       );
 
       context.logger.info('api', {
+        ...context.queryMetrics,
         status: response.status,
         cache: hit ? 'hit' : 'miss',
         durationMs: Date.now() - started,

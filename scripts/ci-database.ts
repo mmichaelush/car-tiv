@@ -41,16 +41,13 @@
  *    `catalog_import_log`. The next deploy resumes from the first file that is
  *    not in that table — no variable to set, nothing to remember.
  *
- *    `SEED_CATALOG=1` clears that log so the whole catalog is applied again,
- *    still paced, which is what to use after editing `data/videos/*.json`;
- *    `SEED_CATALOG=0` skips the catalog step for one build.
+ *    Filenames include a content hash. A new package imports once and resumes
+ *    without resetting the log. `SEED_CATALOG=0` skips the catalog step.
  *
- * ## D1 is the source of truth once the import has finished
+ * ## The final package is authoritative for imported metadata
  *
- * The JSON files are the bootstrap, not a channel for updates. A re-import
- * adds rows and corrects `published_at`; it does not remove a tag an editor
- * deleted or restore a title an editor rewrote, and it must not — those edits
- * are made in the admin and live only in D1.
+ * Source fields and relations are replaced; absent videos are hidden at the
+ * reconciliation step. Existing moderation status is retained on shared ids.
  *
  * ## Failure is reported, and it fails the build
  *
@@ -377,6 +374,24 @@ async function main(): Promise<void> {
  * cannot.
  */
 async function importCatalog(): Promise<void> {
+  if (process.env.SEED_CATALOG === '0') return;
+  const claimed = await queryRows<{ value: number }>(`INSERT INTO catalog_counters (key, value)
+    VALUES ('maintenance.importLease', unixepoch() + 3600)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value
+    WHERE catalog_counters.value < unixepoch() RETURNING value`);
+  if (claimed == null || claimed.length === 0) {
+    failed('another catalog import is running, or the lease could not be acquired');
+    return;
+  }
+  try {
+    await importCatalogFiles();
+  } finally {
+    await queryRows(`UPDATE catalog_counters SET value = 0
+      WHERE key = 'maintenance.importLease' AND value = ${String(claimed[0]?.value)} RETURNING value`);
+  }
+}
+
+async function importCatalogFiles(): Promise<void> {
   heading('catalog');
 
   // Staging gets a sample, not the catalog.
@@ -435,25 +450,7 @@ async function importCatalog(): Promise<void> {
     return;
   }
 
-  // `SEED_CATALOG=1` means "apply everything again", which is now a supported
-  // operation rather than a hopeful one: every generated file is idempotent,
-  // including the search index, which pairs each batch with a delete of the
-  // ids it is about to write. Clearing the log is what makes the files pending
-  // again; the pacing below then spreads them over as many days as they need.
-  if (process.env.SEED_CATALOG === '1') {
-    console.log('SEED_CATALOG=1 — clearing the import log so every file is applied again.');
-    await wrangler([
-      'd1',
-      'execute',
-      DATABASE,
-      '--env',
-      ENVIRONMENT,
-      '--remote',
-      '--yes',
-      '--command=DELETE FROM catalog_import_log',
-    ]);
-  }
-
+  // Content-addressed filenames resume this exact package without resetting spend.
   const applied = await appliedFiles();
   if (applied == null) {
     console.error(
@@ -469,17 +466,6 @@ async function importCatalog(): Promise<void> {
 
   if (pending.length === 0) {
     console.log(`All ${String(manifest.files.length)} catalog files are already applied.`);
-    return;
-  }
-
-  // An existing full import, from before the log existed. Adopting it rather
-  // than repeating it: this repository's own first deploy imported the whole
-  // catalog in one run, so the very first build to carry this code would
-  // otherwise spend 338,860 writes re-importing a database that is already
-  // complete.
-  if (applied.size === 0 && (await catalogLooksComplete())) {
-    console.log('The catalog is already complete; recording it rather than importing it again.');
-    for (const entry of pending) await recordApplied(entry.file, 0);
     return;
   }
 
@@ -506,11 +492,8 @@ async function importCatalog(): Promise<void> {
   for (const entry of pending) {
     const cost = entry.estimatedRowsWritten;
 
-    // The first file is applied even when it alone exceeds the budget —
-    // otherwise a file costing more than a day's allowance would block the
-    // import for ever. Nothing in the current catalog is close: the largest is
-    // about 18,000.
-    if (cost > budget && importedNow > 0) {
+    // Never exceed the remaining daily budget, even for the first file.
+    if (cost > budget) {
       console.log(
         `\nStopping before ${entry.file}: it needs ${format(cost)} rows and` +
           ` ${format(budget)} remain today.`,
@@ -519,6 +502,8 @@ async function importCatalog(): Promise<void> {
     }
 
     process.stdout.write(`  ${entry.file.padEnd(30)} ~${format(cost)} rows … `);
+
+    if (!(await recordApplied(entry.file, cost, false))) return;
 
     const code = await wrangler([
       'd1',
@@ -543,7 +528,7 @@ async function importCatalog(): Promise<void> {
       return;
     }
 
-    await recordApplied(entry.file, cost);
+    if (!(await recordApplied(entry.file, 0, true))) return;
     budget -= cost;
     importedNow += 1;
     console.log('done');
@@ -568,7 +553,9 @@ async function importCatalog(): Promise<void> {
 
 /** Which catalog files this database already holds. `null` when unreadable. */
 async function appliedFiles(): Promise<Set<string> | null> {
-  const rows = await queryRows<{ file: string }>('SELECT file FROM catalog_import_log');
+  const rows = await queryRows<{ file: string }>(
+    'SELECT file FROM catalog_import_log WHERE completed = 1',
+  );
   if (rows == null) return null;
   return new Set(rows.map((row) => row.file));
 }
@@ -583,8 +570,12 @@ async function spent(): Promise<number | null> {
   return typeof value === 'number' ? value : 0;
 }
 
-async function recordApplied(file: string, rowsWritten: number): Promise<void> {
-  await wrangler([
+async function recordApplied(
+  file: string,
+  rowsWritten: number,
+  completed: boolean,
+): Promise<boolean> {
+  const code = await wrangler([
     'd1',
     'execute',
     DATABASE,
@@ -593,23 +584,15 @@ async function recordApplied(file: string, rowsWritten: number): Promise<void> {
     '--remote',
     '--yes',
     '--command=' +
-      `INSERT OR REPLACE INTO catalog_import_log (file, applied_on, rows_written) ` +
-      `VALUES ('${file.replaceAll("'", "''")}', date('now'), ${String(rowsWritten)})`,
+      `INSERT INTO catalog_import_log (file, applied_on, rows_written, completed) ` +
+      `VALUES ('${file.replaceAll("'", "''")}', date('now'), ${String(rowsWritten)}, ${completed ? '1' : '0'}) ` +
+      `ON CONFLICT(file) DO UPDATE SET applied_on = excluded.applied_on, ` +
+      `rows_written = CASE WHEN catalog_import_log.applied_on = excluded.applied_on ` +
+      `THEN catalog_import_log.rows_written + excluded.rows_written ELSE excluded.rows_written END, ` +
+      `completed = excluded.completed, applied_at = CURRENT_TIMESTAMP`,
   ]);
-}
-
-/**
- * Whether this database already holds a finished catalog.
- *
- * Only asked once, on the first deploy that finds an empty log, to tell a fresh
- * database apart from one imported before the log existed. `video_tags` is the
- * table that decides it: it is the last thing a partial import would have
- * finished, and the one whose absence makes the site look subtly wrong rather
- * than obviously empty.
- */
-async function catalogLooksComplete(): Promise<boolean> {
-  const [videos, links] = await Promise.all([countRows('videos'), countRows('video_tags')]);
-  return videos != null && videos > 0 && links != null && links > 0;
+  if (code !== 0) failed(`could not record import progress for ${file}`);
+  return code === 0;
 }
 
 const format = (value: number): string => value.toLocaleString('en');

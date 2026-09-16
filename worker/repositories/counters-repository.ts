@@ -240,7 +240,7 @@ export class CountersRepository extends BaseRepository {
   /** When the counters were last recomputed, or `null` if they never were. */
   async lastRefreshedAt(): Promise<string | null> {
     const row = await this.first<{ at: string | null }>(
-      `SELECT MAX(updated_at) AS at FROM catalog_counters`,
+      `SELECT updated_at AS at FROM catalog_counters WHERE key = 'videos.live'`,
     );
     return row?.at ?? null;
   }
@@ -249,117 +249,46 @@ export class CountersRepository extends BaseRepository {
   // Writing
   // -------------------------------------------------------------------------
 
-  /**
-   * Recompute every counter, writing only the rows whose value actually moved.
-   *
-   * ## The measurement that rewrote this
-   *
-   * The first version updated every row unconditionally. Against the real
-   * catalog that is:
-   *
-   * | statement                    | rows written |
-   * | ---------------------------- | -----------: |
-   * | `UPDATE categories`          |           10 |
-   * | `UPDATE channels`            |          416 |
-   * | `UPDATE tags`                |       10,732 |
-   * | `DELETE category_tag_counts` |        5,703 |
-   * | `INSERT category_tag_counts` |        5,703 |
-   * | `catalog_counters`           |            5 |
-   * | **total, per refresh**       |   **22,569** |
-   *
-   * D1's free plan allows 100,000 row writes a day, and since 1 September 2026
-   * queries *fail* once that is spent rather than merely being billed. The
-   * hourly cron alone came to 541,656 writes a day — five times the budget —
-   * and every admin edit triggered another full pass on top. The site would
-   * have started returning database errors within hours of going live, every
-   * day, and the cause would have looked like a Cloudflare outage rather than
-   * a line of our own SQL.
-   *
-   * The number of rows that actually *needed* writing in that measurement was
-   * zero. Nothing about the catalog had changed.
-   *
-   * ## What it does now
-   *
-   * Every statement carries a change guard, so the cost of a refresh is
-   * proportional to what moved rather than to the size of the catalog. Measured
-   * on the same data:
-   *
-   * | situation                        | rows written |
-   * | -------------------------------- | -----------: |
-   * | nothing changed (the hourly case) |            0 |
-   * | one video hidden (8 tags)         |           17 |
-   * | fifty videos hidden               |          351 |
-   *
-   * Plus the five `catalog_counters` rows, which are written every time on
-   * purpose: their `updated_at` is the heartbeat the admin page reads to answer
-   * "is the refresh actually running?", and a heartbeat that only beats when
-   * something changed cannot answer it. Five rows an hour is 120 a day.
-   *
-   * That makes the hourly cron cost 120 writes a day instead of 541,656, and it
-   * is also what makes calling this after an admin write reasonable: the call
-   * now costs what the edit was worth.
-   *
-   * The returned counts therefore mean "rows whose counter changed", not "rows
-   * examined" — which is the more useful number anyway, and the one the
-   * maintenance heartbeat reports.
-   */
+  /** Reconcile only after a catalog mutation; the batch clears dirtiness atomically. */
   async refreshAll(): Promise<CounterRefresh> {
     const started = Date.now();
-
-    const categories = await this.#refreshCategories();
-    const channels = await this.#refreshChannels();
-    const tags = await this.#refreshTags();
-    const categoryTagPairs = await this.#refreshCategoryTags();
-    await this.#refreshTotals();
-
-    return { categories, channels, tags, categoryTagPairs, durationMs: Date.now() - started };
+    const dirty = await this.first<{ value: number }>(
+      "SELECT value FROM catalog_counters WHERE key = 'maintenance.catalogDirty'",
+    );
+    if (dirty?.value === 0) {
+      // Time alone changes this one counter. The added_at index bounds its scan.
+      await this.run(`UPDATE catalog_counters SET value = (
+        SELECT COUNT(*) FROM videos WHERE status = 'published' AND deleted_at IS NULL
+        AND added_at >= date('now', '-7 days'))
+        WHERE key = 'videos.addedThisWeek' AND updated_at < date('now')`);
+      await this.run(`UPDATE catalog_counters SET updated_at = CURRENT_TIMESTAMP
+        WHERE key IN ('videos.live', 'videos.addedThisWeek', 'channels.visible',
+        'categories.visible', 'tags.visible') AND updated_at < datetime('now', '-1 hour')`);
+      return {
+        categories: 0,
+        channels: 0,
+        tags: 0,
+        categoryTagPairs: 0,
+        durationMs: Date.now() - started,
+      };
+    }
+    // D1 serializes this transaction with mutations. No write can land between
+    // recomputing the counters and clearing the dirty flag.
+    const results = await this.batchWithResults([
+      ...Object.values(COUNTER_REFRESH).map((sql) => ({ sql })),
+      {
+        sql: "UPDATE catalog_counters SET value = 0 WHERE key = 'maintenance.catalogDirty' AND value <> 0",
+      },
+    ]);
+    const changes = (index: number): number => Number(results[index]?.meta.changes ?? 0);
+    return {
+      categories: changes(0),
+      channels: changes(1),
+      tags: changes(2),
+      categoryTagPairs: changes(3) + changes(4),
+      durationMs: Date.now() - started,
+    };
   }
-
-  /** Live videos per category. */
-  async #refreshCategories(): Promise<number> {
-    const result = await this.run(COUNTER_REFRESH.categories);
-    return Number(result.meta.changes);
-  }
-
-  /** Live videos per channel. */
-  async #refreshChannels(): Promise<number> {
-    const result = await this.run(COUNTER_REFRESH.channels);
-    return Number(result.meta.changes);
-  }
-
-  /** Live videos per tag. */
-  async #refreshTags(): Promise<number> {
-    const result = await this.run(COUNTER_REFRESH.tags);
-    return Number(result.meta.changes);
-  }
-
-  /**
-   * Reconcile `category_tag_counts` with the catalog.
-   *
-   * This was a `DELETE` of the whole table followed by an `INSERT … SELECT`,
-   * which is 11,406 row writes every time it runs whether or not a single pair
-   * moved. The delete-then-insert was chosen because a tag that lost its last
-   * video in a category has to lose its row — but that is two statements, not a
-   * table rebuild: upsert the pairs whose count differs, then delete the pairs
-   * the aggregate no longer produces.
-   *
-   * Verified against the real catalog to leave a byte-identical table to the
-   * full rebuild, and to write nothing at all when nothing changed.
-   */
-  async #refreshCategoryTags(): Promise<number> {
-    const upserted = await this.run(COUNTER_REFRESH.categoryTagsUpsert);
-    const deleted = await this.run(COUNTER_REFRESH.categoryTagsDelete);
-    return Number(upserted.meta.changes) + Number(deleted.meta.changes);
-  }
-
-  /** The five catalog-wide numbers. */
-  async #refreshTotals(): Promise<void> {
-    await this.run(COUNTER_REFRESH.totals);
-  }
-
-  // -------------------------------------------------------------------------
-  // Growth and retention
-  // -------------------------------------------------------------------------
 
   /**
    * Record today's row count for each watched table.
@@ -371,6 +300,11 @@ export class CountersRepository extends BaseRepository {
    */
   async sampleGrowth(): Promise<number> {
     const day = new Date().toISOString().slice(0, 10);
+    const sampled = await this.first<{ found: number }>(
+      'SELECT 1 AS found FROM table_growth_samples WHERE day = ? LIMIT 1',
+      [day],
+    );
+    if (sampled != null) return 0;
 
     // Two statements, not two per table. The loop version issued twenty-four
     // queries, and D1's free plan caps a Worker invocation at fifty — with the
@@ -453,6 +387,23 @@ export class CountersRepository extends BaseRepository {
     deleted += Number(orphanedErrors.meta.changes);
     deleted += await this.#pruneByAge('import_jobs', 'created_at', RETENTION.importJobs.days);
 
+    return deleted;
+  }
+
+  /** Retention's row-cap checks use OFFSET; do not pay that scan every hour. */
+  async pruneDaily(): Promise<number> {
+    const day = new Date().toISOString().slice(0, 10);
+    const done = await this.first<{ updated_at: string }>(
+      "SELECT updated_at FROM catalog_counters WHERE key = 'maintenance.pruneDay'",
+    );
+    if (done?.updated_at === day) return 0;
+    const deleted = await this.prune();
+    await this.run(
+      `INSERT INTO catalog_counters (key, value, updated_at)
+      VALUES ('maintenance.pruneDay', 0, ?)
+      ON CONFLICT(key) DO UPDATE SET updated_at = excluded.updated_at`,
+      [day],
+    );
     return deleted;
   }
 

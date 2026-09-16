@@ -145,9 +145,10 @@ export function seedCatalog(db: TestDatabase, options: SeedOptions = {}): void {
   for (const video of videos) {
     if (video.channel == null || channelIds.has(video.channel)) continue;
     db.runRaw(
-      `INSERT INTO channels (slug, name, is_featured) VALUES (?, ?, ?)`,
+      `INSERT INTO channels (slug, name, is_featured, netfree_open) VALUES (?, ?, ?, ?)`,
       video.channel,
       channelName(video.channel),
+      video.channel === 'auto-il' ? 1 : 0,
       video.channel === 'auto-il' ? 1 : 0,
     );
     const [row] = db.queryRaw<{ id: number }>(
@@ -309,4 +310,5 @@ export function clearCounters(db: TestDatabase): void {
   db.runRaw(`UPDATE tags SET video_count = 0`);
   db.runRaw(`DELETE FROM category_tag_counts`);
   db.runRaw(`UPDATE catalog_counters SET value = 0`);
+  db.runRaw(`UPDATE catalog_counters SET value = 1 WHERE key = 'maintenance.catalogDirty'`);
 }

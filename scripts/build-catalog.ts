@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 /**
  * Build the D1 import from the legacy JSON catalog.
  *
@@ -38,6 +39,9 @@ import { COUNTER_REFRESH } from '../worker/repositories/counters-repository.js';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const DATA_DIR = path.join(ROOT, 'data');
+const digest = (text: string): string =>
+  createHash('sha256').update(text).digest('hex').slice(0, 16);
+
 const OUT_DIR = path.join(ROOT, 'build', 'catalog');
 
 /** Category ids that exist in `seeds/0001_reference_data.sql`. */
@@ -55,6 +59,10 @@ const KNOWN_CATEGORIES = [
 ] as const;
 
 interface FeaturedChannelRow {
+  readonly id?: string;
+  readonly youtubeChannelId?: string;
+  readonly netfreeOpen?: boolean;
+  readonly hasHebrewVideos?: boolean;
   readonly channel_name?: string;
   readonly channel_url?: string;
   readonly channel_image_url?: string;
@@ -82,39 +90,46 @@ async function main(): Promise<void> {
   await rm(OUT_DIR, { recursive: true, force: true });
   await mkdir(OUT_DIR, { recursive: true });
 
-  const groups = buildStatementGroups(result, manufacturers, featured);
+  for (const channel of result.channels) {
+    if (channel.sourceId != null && !featured.has(channel.sourceId)) {
+      throw new Error('Unknown channel identity: ' + channel.sourceId);
+    }
+  }
+  const revision = digest(JSON.stringify([result.videos, [...featured]]));
+  const groups = buildStatementGroups(result, manufacturers, featured, revision);
   const written: string[] = [];
   let fileIndex = 1;
 
   for (const group of groups) {
     for (const contents of chunkStatements(group.statements)) {
-      const name = `${String(fileIndex).padStart(4, '0')}_${group.name}.sql`;
+      const name = `${String(fileIndex).padStart(4, '0')}_${group.name}_${digest(contents)}.sql`;
       await writeFile(path.join(OUT_DIR, name), `-- ${group.title}\n\n${contents}`, 'utf8');
       written.push(name);
       fileIndex += 1;
     }
   }
 
-  // The last file of every import is the counter refresh.
-  //
-  // Every maintained counter starts at zero, and the public catalog reads those
-  // columns instead of counting rows — so a database that was imported and not
-  // refreshed serves an empty tag cloud, an empty tag filter and a zero beside
-  // every category and channel. That looks like the filtering being broken, not
-  // like a missing step, and it was a documented step, which is a step someone
-  // can skip. Carrying it here means it cannot be skipped.
-  //
-  // The SQL is imported from `CountersRepository`, never restated, so the
-  // import and the hourly cron can never compute a counter differently.
-  const counterFile = `${String(fileIndex).padStart(4, '0')}_counters.sql`;
-  await writeFile(
-    path.join(OUT_DIR, counterFile),
-    `-- Maintained counters — see worker/repositories/counters-repository.ts\n` +
-      `-- Idempotent and guarded: running it twice writes nothing the second time.\n\n` +
-      `${Object.values(COUNTER_REFRESH).join(';\n\n')};\n`,
-    'utf8',
+  // Bound the expensive tag updates so each file fits the daily write budget.
+  // Slug lookups use the unique index and also work against an existing database.
+  const counterStatements: string[] = [COUNTER_REFRESH.categories, COUNTER_REFRESH.channels];
+  for (let start = 0; start < result.tags.length; start += 1000) {
+    const slugs = result.tags.slice(start, start + 1000).map((tag) => sql(tag.slug));
+    counterStatements.push(COUNTER_REFRESH.tags + ` AND slug IN (${slugs.join(', ')})`);
+  }
+  // This final pass clears counts on old tags absent from the package.
+  counterStatements.push(
+    COUNTER_REFRESH.tags,
+    COUNTER_REFRESH.categoryTagsUpsert,
+    COUNTER_REFRESH.categoryTagsDelete,
+    COUNTER_REFRESH.totals +
+      "; UPDATE catalog_counters SET value = 0 WHERE key = 'maintenance.catalogDirty' AND value <> 0",
   );
-  written.push(counterFile);
+  for (const statement of counterStatements) {
+    const contents = `-- Counters for catalog ${revision}\n${statement};\n`;
+    const name = `${String(fileIndex++).padStart(4, '0')}_counters_${digest(contents)}.sql`;
+    await writeFile(path.join(OUT_DIR, name), contents, 'utf8');
+    written.push(name);
+  }
 
   const report = buildReport(result, featured.size, written);
   await writeFile(path.join(OUT_DIR, 'report.json'), JSON.stringify(report, null, 2), 'utf8');
@@ -155,7 +170,7 @@ async function readFeaturedChannels(file: string): Promise<Map<string, FeaturedC
 
   const map = new Map<string, FeaturedChannelRow>();
   for (const row of rows) {
-    const slug = slugify(row.channel_name ?? '');
+    const slug = row.id ?? slugify(row.channel_name ?? '');
     if (slug.length > 0) map.set(slug, row);
   }
   return map;
@@ -175,6 +190,7 @@ function buildStatementGroups(
   result: CatalogBuildResult,
   manufacturers: ReturnType<typeof parseVehicleReference>,
   featured: Map<string, FeaturedChannelRow>,
+  revision: string,
 ): StatementGroup[] {
   const groups: StatementGroup[] = [];
 
@@ -207,12 +223,16 @@ function buildStatementGroups(
     const highlight = featured.get(channel.slug);
     return [
       channel.slug,
-      channel.name,
+      highlight?.channel_name ?? channel.name,
       channel.imageUrl ?? highlight?.channel_image_url ?? null,
       highlight?.channel_url ?? null,
       highlight?.content_description ?? '',
-      highlight != null,
+      highlight?.netfreeOpen === true,
       highlight != null ? order : 0,
+      channel.sourceId,
+      highlight?.youtubeChannelId ?? null,
+      highlight?.netfreeOpen ?? null,
+      highlight?.hasHebrewVideos ?? null,
     ];
   });
 
@@ -227,8 +247,12 @@ function buildStatementGroups(
       row.channel_image_url ?? null,
       row.channel_url ?? null,
       row.content_description ?? '',
-      true,
+      row.netfreeOpen === true,
       extraOrder,
+      row.id ?? null,
+      row.youtubeChannelId ?? null,
+      row.netfreeOpen ?? null,
+      row.hasHebrewVideos ?? null,
     ]);
   }
 
@@ -237,8 +261,31 @@ function buildStatementGroups(
     title: `Channels (${String(channelRows.length)})`,
     statements: insertMany(
       'channels',
-      ['slug', 'name', 'image_url', 'youtube_url', 'description', 'is_featured', 'featured_order'],
+      [
+        'slug',
+        'name',
+        'image_url',
+        'youtube_url',
+        'description',
+        'is_featured',
+        'featured_order',
+        'source_id',
+        'youtube_channel_id',
+        'netfree_open',
+        'has_hebrew_videos',
+      ],
       channelRows,
+      { orIgnore: false },
+    ).map((statement) =>
+      statement.replace(
+        /;$/,
+        ` ON CONFLICT(slug) DO UPDATE SET
+      name=excluded.name, image_url=excluded.image_url, youtube_url=excluded.youtube_url,
+      description=excluded.description, is_featured=excluded.is_featured,
+      featured_order=excluded.featured_order, source_id=excluded.source_id,
+      youtube_channel_id=excluded.youtube_channel_id, netfree_open=excluded.netfree_open,
+      has_hebrew_videos=excluded.has_hebrew_videos;`,
+      ),
     ),
   });
 
@@ -257,7 +304,7 @@ function buildStatementGroups(
   groups.push({
     name: 'videos',
     title: `Videos (${String(result.videos.length)})`,
-    statements: buildVideoStatements(result),
+    statements: buildVideoStatements(result, revision),
   });
 
   // 5. Relations.
@@ -280,10 +327,20 @@ function buildStatementGroups(
     statements: buildSearchIndexStatements(result, manufacturers),
   });
 
+  groups.push({
+    name: 'reconcile',
+    title: 'Retire rows absent from this package',
+    statements: [
+      `UPDATE videos SET status = 'hidden', updated_at = CURRENT_TIMESTAMP
+      WHERE catalog_revision IS NOT ${sql(revision)} AND status = 'published';`,
+      `UPDATE channels SET is_visible = 0 WHERE is_visible = 1 AND
+      (source_id IS NULL OR source_id NOT IN (${[...featured.keys()].map(sql).join(', ')}));`,
+    ],
+  });
   return groups;
 }
 
-function buildVideoStatements(result: CatalogBuildResult): string[] {
+function buildVideoStatements(result: CatalogBuildResult, revision: string): string[] {
   // channel_id is resolved from the slug at insert time, so this file never
   // hard-codes an autoincrement id.
   return result.videos.map((video) => {
@@ -292,24 +349,19 @@ function buildVideoStatements(result: CatalogBuildResult): string[] {
         ? 'NULL'
         : `(SELECT id FROM channels WHERE slug = ${sql(video.channelSlug)})`;
 
-    // `ON CONFLICT … DO UPDATE` on this one column, rather than the
-    // `INSERT OR IGNORE` this used to be.
-    //
-    // Ignoring a conflict makes a re-import a no-op for every row that already
-    // exists, which is right for everything an editor may have touched —
-    // `status`, `added_at`, a corrected title — and wrong for `published_at`,
-    // which was introduced after 7,876 rows had already been imported without
-    // it. Ignore, and those rows keep a NULL publish date for ever and the
-    // fix ships as code that never runs. Updating exactly this column corrects
-    // them on the next import and touches nothing else.
+    // The final package is authoritative for imported metadata.
     return (
       `INSERT INTO videos\n` +
-      `  (id, title, description, category_id, channel_id, duration_seconds, language, is_hebrew, added_at, published_at, status)\n` +
+      `  (id, title, description, category_id, channel_id, duration_seconds, language, is_hebrew, added_at, published_at, netfree_open, catalog_revision, status)\n` +
       `  VALUES (${sql(video.id)}, ${sql(video.title)}, ${sql(video.description)}, ` +
       `${sql(video.categoryId)}, ${channel}, ${String(video.durationSeconds)}, ` +
       `${sql(video.language)}, ${video.isHebrew ? '1' : '0'}, ${sql(video.addedAt)}, ` +
-      `${video.publishedAt == null ? 'NULL' : sql(video.publishedAt)}, 'published')\n` +
-      `  ON CONFLICT (id) DO UPDATE SET published_at = excluded.published_at;`
+      `${video.publishedAt == null ? 'NULL' : sql(video.publishedAt)}, ${sql(video.netfreeOpen)}, ${sql(revision)}, 'published')\n` +
+      `  ON CONFLICT (id) DO UPDATE SET title=excluded.title, description=excluded.description,
+        category_id=excluded.category_id, channel_id=excluded.channel_id,
+        duration_seconds=excluded.duration_seconds, language=excluded.language,
+        is_hebrew=excluded.is_hebrew, added_at=excluded.added_at,
+        published_at=excluded.published_at, netfree_open=excluded.netfree_open, catalog_revision=excluded.catalog_revision;`
     );
   });
 }
@@ -317,6 +369,7 @@ function buildVideoStatements(result: CatalogBuildResult): string[] {
 function buildVideoTagStatements(result: CatalogBuildResult): string[] {
   const statements: string[] = [];
   for (const video of result.videos) {
+    statements.push(`DELETE FROM video_tags WHERE video_id = ${sql(video.id)};`);
     for (const tagSlug of video.tagSlugs) {
       statements.push(
         `INSERT OR IGNORE INTO video_tags (video_id, tag_id)\n` +
@@ -330,6 +383,7 @@ function buildVideoTagStatements(result: CatalogBuildResult): string[] {
 function buildVideoVehicleStatements(result: CatalogBuildResult): string[] {
   const statements: string[] = [];
   for (const video of result.videos) {
+    statements.push(`DELETE FROM video_vehicle_models WHERE video_id = ${sql(video.id)};`);
     for (const match of video.vehicles) {
       if (match.modelSlug == null) continue;
       const year = video.years.length > 0 ? video.years[0] : null;

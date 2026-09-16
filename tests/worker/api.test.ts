@@ -462,27 +462,24 @@ describe('GET /api/videos/:id?include=', () => {
 });
 
 describe('unbounded query parameters', () => {
-  // Both of these routes read their parameters raw while `/api/videos` clamped
-  // through `parseQuery`. Both are cached with `q` in the key, so an unbounded
-  // value was an unbounded FTS query *and* an unbounded cache key — a way to
-  // fill the edge cache with entries nobody will ever request again.
+  // Oversized input is rejected before cache lookup and before any D1 query.
   const huge = 'א'.repeat(5_000);
 
-  it('clamps the search suggestion query', async () => {
+  it('rejects an oversized search suggestion query', async () => {
     const { status } = await api.json(`/api/search/suggestions?q=${encodeURIComponent(huge)}`);
-    expect(status).toBe(200);
+    expect(status).toBe(400);
   });
 
-  it('clamps the tag search query', async () => {
+  it('rejects an oversized tag search query', async () => {
     const { status } = await api.json(`/api/tags/search?q=${encodeURIComponent(huge)}`);
-    expect(status).toBe(200);
+    expect(status).toBe(400);
   });
 
-  it('clamps the tag search category', async () => {
+  it('rejects an oversized tag search category', async () => {
     const { status } = await api.json(
       `/api/tags/search?q=שמן&category=${encodeURIComponent(huge)}`,
     );
-    expect(status).toBe(200);
+    expect(status).toBe(400);
   });
 
   it('still answers a normal suggestion query', async () => {

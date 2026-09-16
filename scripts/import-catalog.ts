@@ -87,8 +87,8 @@ async function main(): Promise<void> {
   console.log("Done — counters refreshed by the import's last file.");
   console.log('');
   console.log('This applies every file in one go, which is right for a local');
-  console.log('database and wrong for a remote one: the full catalog is 338,860');
-  console.log("rows written and D1's free plan allows 100,000 a day. Deploys use");
+  console.log('database. For remote imports, measure catalog:cost first.');
+  console.log("The full package exceeds D1's daily write allowance. Deploys use");
   console.log('scripts/ci-database.ts, which paces the import across days.');
 }
 

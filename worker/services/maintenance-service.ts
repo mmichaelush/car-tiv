@@ -11,14 +11,14 @@
  *     oEmbed endpoint, oldest-checked first, so every video comes round in
  *     time without any single run being expensive.
  *  2. **Counter refresh.** The aggregates behind `/api/tags`, `/api/stats`,
- *     `/api/categories` and `/api/channels` are recomputed here so that no
+ *     `/api/categories` and `/api/channels` are recomputed after catalog mutations so that no
  *     visitor ever pays for them. This is the job that keeps the site inside
  *     D1's free read budget; see `migrations/0008_counters.sql`.
  *  3. **Retention.** Every table that grows with traffic rather than with the
- *     catalog is trimmed to the bounds in `RETENTION`. Without this, storage
+ *     catalog is trimmed daily to the bounds in `RETENTION`. Without this, storage
  *     is a slope with no ceiling.
  *  4. **Housekeeping.** Expired sessions and spent rate-limit windows are
- *     deleted, and one row per table records how many rows it holds today —
+ *     deleted hourly, and one daily sample records each table size —
  *     which is what makes a storage forecast possible at all.
  *  5. **A heartbeat.** One row in `maintenance_runs`, so the admin can answer
  *     "is the checker actually running?" — a silent cron job and a deleted one
@@ -110,12 +110,11 @@ export class MaintenanceService {
     // whatever happens, which is a few thousand writes a day out of an
     // account-wide budget of 100,000. That is affordable normally and is not
     // affordable during a bootstrap, when the import needs every row it can
-    // get for four days and a video the checker has not looked at yet is not a
+    // get across days and a video the checker has not looked at yet is not a
     // problem — it has been in the database for minutes.
     //
-    // Everything else in this run is already proportional to change: the
-    // counters write only what moved, the retention pass only deletes what has
-    // expired, and the reindex backlog is empty unless something failed.
+    // Counter scans are skipped while clean. Retention and growth sampling run
+    // once daily; the reindex backlog is empty unless indexing failed.
     const importing = await this.#catalogStillImporting();
 
     const links = importing
@@ -134,7 +133,7 @@ export class MaintenanceService {
       return null;
     });
 
-    const rowsPruned = await this.#counters.prune().catch((cause: unknown) => {
+    const rowsPruned = await this.#counters.pruneDaily().catch((cause: unknown) => {
       this.#logger.warn('Retention pass failed', { error: describe(cause) });
       return 0;
     });

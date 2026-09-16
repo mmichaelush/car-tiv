@@ -55,12 +55,15 @@ const SUMMARY_COLUMNS = `
   v.added_at          AS addedAt,
   v.published_at      AS publishedAt,
   v.thumbnail_url     AS thumbnailUrl,
+  v.netfree_open       AS netfreeOpen,
   v.is_hebrew         AS isHebrew,
   v.is_featured       AS isFeatured,
   (
-    SELECT group_concat(t.name, '${LIST_SEPARATOR}')
-    FROM video_tags vt JOIN tags t ON t.id = vt.tag_id
-    WHERE vt.video_id = v.id AND t.is_visible = 1
+    SELECT group_concat(name, '${LIST_SEPARATOR}') FROM (
+      SELECT t.name FROM video_tags vt CROSS JOIN tags t ON t.id = vt.tag_id
+      WHERE vt.video_id = v.id AND t.is_visible = 1
+      ORDER BY t.video_count DESC, t.name
+    )
   ) AS tagNames,
   -- A short excerpt, not the description. See EXCERPT_LENGTH above.
   substr(v.description, 1, ${String(EXCERPT_LENGTH)}) AS excerpt`;
@@ -118,6 +121,7 @@ interface SummaryRow {
   addedAt: string;
   publishedAt: string | null;
   thumbnailUrl: string | null;
+  netfreeOpen: number | null;
   isHebrew: number;
   isFeatured: number;
   tagNames: string | null;
@@ -384,21 +388,21 @@ export class VideoRepository extends BaseRepository {
        candidates AS (
          SELECT id FROM (
            SELECT v.id, v.added_at FROM video_vehicle_models x
-             JOIN videos v ON v.id = x.video_id
+             CROSS JOIN videos v ON v.id = x.video_id
              WHERE x.model_id IN (SELECT model_id FROM source_models) AND ${LIVE}
              ORDER BY v.added_at DESC LIMIT ${String(CANDIDATE_POOL)}
          )
          UNION
          SELECT id FROM (
            SELECT v.id, v.added_at FROM video_vehicle_models x
-             JOIN videos v ON v.id = x.video_id
+             CROSS JOIN videos v ON v.id = x.video_id
              WHERE x.model_id IN (SELECT id FROM make_models) AND ${LIVE}
              ORDER BY v.added_at DESC LIMIT ${String(CANDIDATE_POOL)}
          )
          UNION
          SELECT id FROM (
            SELECT v.id, v.added_at FROM video_tags x
-             JOIN videos v ON v.id = x.video_id
+             CROSS JOIN videos v ON v.id = x.video_id
              WHERE x.tag_id IN (SELECT tag_id FROM source_tags) AND ${LIVE}
              ORDER BY v.added_at DESC LIMIT ${String(CANDIDATE_POOL)}
          )
@@ -416,7 +420,7 @@ export class VideoRepository extends BaseRepository {
            ORDER BY v.added_at DESC LIMIT ${String(CANDIDATE_POOL)}
          )
        ),
-       scored AS (
+       scored AS MATERIALIZED (
          SELECT v.id,
            ${W.sameModel} * (SELECT COUNT(*) > 0 FROM video_vehicle_models x
                 WHERE x.video_id = v.id AND x.model_id IN (SELECT model_id FROM source_models))
@@ -427,8 +431,8 @@ export class VideoRepository extends BaseRepository {
                        WHERE x.video_id = v.id AND x.tag_id IN (SELECT tag_id FROM source_tags)))
          + ${W.sameChannel} * (v.channel_id IS NOT NULL AND v.channel_id = (SELECT channel_id FROM source))
            AS score
-         FROM videos v
-         JOIN candidates c ON c.id = v.id
+         FROM candidates c
+         CROSS JOIN videos v ON v.id = c.id
          WHERE v.id <> ? AND ${LIVE}
        )
        SELECT ${SUMMARY_COLUMNS}
@@ -685,6 +689,7 @@ function toSummary(row: SummaryRow): VideoSummary {
     addedAt: row.addedAt,
     publishedAt: row.publishedAt,
     thumbnailUrl: row.thumbnailUrl,
+    netfreeOpen: row.netfreeOpen == null ? null : toBoolean(row.netfreeOpen),
     isHebrew: toBoolean(row.isHebrew),
     isFeatured: toBoolean(row.isFeatured),
     tags: splitList(row.tagNames).slice(0, TAGS.perCard),

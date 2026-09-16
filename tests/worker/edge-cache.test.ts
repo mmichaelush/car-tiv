@@ -39,11 +39,9 @@ describe('what is eligible at all', () => {
     expect(cacheKeyFor(new Request(url, { method: 'POST' }), url, '1')).toBeNull();
   });
 
-  it('honours a caller asking for fresh data', () => {
-    // This is how an editor sees their change immediately instead of waiting
-    // for a TTL — the browser sends `no-cache` on a hard reload.
-    expect(keyOf('/api/videos', { 'cache-control': 'no-cache' })).toBeNull();
-    expect(keyOf('/api/videos', { 'cache-control': 'no-store' })).toBeNull();
+  it('does not let a public caller bypass the cache', () => {
+    expect(keyOf('/api/videos', { 'cache-control': 'no-cache' })).toBe(keyOf('/api/videos'));
+    expect(keyOf('/api/videos', { 'cache-control': 'no-store' })).toBe(keyOf('/api/videos'));
   });
 });
 

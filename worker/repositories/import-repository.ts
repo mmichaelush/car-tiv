@@ -57,6 +57,11 @@ import { newId } from '../lib/crypto.js';
 import { BaseRepository, chunkForBindings, placeholders, type Binding } from './base.js';
 import { SearchIndexRepository } from './search-index-repository.js';
 
+function channelSource(draft: ImportDraft): string | null {
+  const value = draft.channelSourceId?.trim();
+  return value == null || value.length === 0 ? null : value;
+}
+
 export type ImportFormat = 'json' | 'csv' | 'xlsx' | 'youtube-urls';
 
 export interface ImportJob {
@@ -233,7 +238,7 @@ export class ImportRepository extends BaseRepository {
       writes.push({
         row,
         categoryId: named ?? fallback,
-        channelId: channels.get(slugify(draft.channelName)) ?? null,
+        channelId: channels.get(channelSource(draft) ?? slugify(draft.channelName)) ?? null,
       });
 
       if (existing.has(draft.videoId)) updated += 1;
@@ -372,14 +377,19 @@ export class ImportRepository extends BaseRepository {
    * issued.
    */
   async #resolveChannels(rows: readonly ImportRow[]): Promise<Map<string, number>> {
-    const wanted = new Map<string, { name: string; url: string }>();
+    const wanted = new Map<string, { name: string; url: string; sourceId: string | null }>();
     for (const { draft } of rows) {
       if (draft.channelName.length === 0) continue;
-      const slug = slugify(draft.channelName);
+      const slug = channelSource(draft) ?? slugify(draft.channelName);
       if (slug.length === 0) continue;
       // First spelling wins, so two rows naming the same channel differently
       // still resolve to one row rather than racing.
-      if (!wanted.has(slug)) wanted.set(slug, { name: draft.channelName, url: draft.channelUrl });
+      if (!wanted.has(slug))
+        wanted.set(slug, {
+          name: draft.channelName,
+          url: draft.channelUrl,
+          sourceId: channelSource(draft),
+        });
     }
     if (wanted.size === 0) return new Map();
 
@@ -389,13 +399,14 @@ export class ImportRepository extends BaseRepository {
     if (missing.length === 0) return ids;
 
     await this.batch(
-      chunkForBindings(missing, { perItem: 3 }).map((group) => ({
-        sql: `INSERT OR IGNORE INTO channels (slug, name, youtube_url)
-              VALUES ${group.map(() => '(?, ?, ?)').join(', ')}`,
+      chunkForBindings(missing, { perItem: 4 }).map((group) => ({
+        sql: `INSERT OR IGNORE INTO channels (slug, name, youtube_url, source_id)
+              VALUES ${group.map(() => '(?, ?, ?, ?)').join(', ')}`,
         bindings: group.flatMap(([slug, channel]) => [
           slug,
           channel.name,
           channel.url.length === 0 ? null : channel.url,
+          channel.sourceId,
         ]),
       })),
     );
@@ -461,12 +472,12 @@ export class ImportRepository extends BaseRepository {
     // and `added_at` alone on an existing video. An import re-run must not
     // republish something an editor hid, nor move a two-year-old video to the
     // top of "newest" because a spreadsheet was uploaded again today.
-    const COLUMNS = 9;
+    const COLUMNS = 10;
     return chunkForBindings(writes, { perItem: COLUMNS }).map((group) => ({
       sql: `INSERT INTO videos
               (id, title, description, category_id, channel_id,
-               duration_seconds, is_hebrew, status, added_at)
-            VALUES ${group.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP))').join(', ')}
+               duration_seconds, is_hebrew, status, added_at, netfree_open)
+            VALUES ${group.map(() => '(?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?)').join(', ')}
             ON CONFLICT (id) DO UPDATE SET
               title            = excluded.title,
               description      = excluded.description,
@@ -474,6 +485,7 @@ export class ImportRepository extends BaseRepository {
               channel_id       = excluded.channel_id,
               duration_seconds = excluded.duration_seconds,
               is_hebrew        = excluded.is_hebrew,
+              netfree_open     = COALESCE(excluded.netfree_open, videos.netfree_open),
               updated_at       = CURRENT_TIMESTAMP`,
       bindings: group.flatMap(({ row, categoryId, channelId }) => [
         row.draft.videoId,
@@ -485,6 +497,7 @@ export class ImportRepository extends BaseRepository {
         row.draft.isHebrew ? 1 : 0,
         status,
         row.draft.addedAt,
+        row.draft.netfreeOpen == null ? null : Number(row.draft.netfreeOpen),
       ]),
     }));
   }

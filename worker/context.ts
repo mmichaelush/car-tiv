@@ -8,6 +8,7 @@
  */
 
 import type { ExecutionContext } from '@cloudflare/workers-types';
+import type { BaseRepository, QueryMetrics } from './repositories/base.js';
 import { MAX_REQUEST_BODY_BYTES } from '@shared/constants.js';
 import type { Env, FeatureFlags } from './env.js';
 import { readFeatureFlags } from './env.js';
@@ -42,6 +43,7 @@ export interface Repositories {
 }
 
 export interface RequestContext {
+  readonly queryMetrics: QueryMetrics;
   readonly request: Request;
   readonly env: Env;
   readonly url: URL;
@@ -113,8 +115,12 @@ export function createContext(
   };
 
   let cachedFingerprint: Promise<string> | null = null;
+  const queryMetrics = { queries: 0, rowsRead: 0, rowsWritten: 0, databaseMs: 0 };
+  for (const repository of Object.values(repositories) as BaseRepository[])
+    repository.observe(queryMetrics);
 
   return {
+    queryMetrics,
     request,
     env,
     url,

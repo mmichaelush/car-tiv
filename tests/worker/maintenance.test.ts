@@ -63,7 +63,8 @@ afterEach(() => {
 
 describe('videosDueForCheck', () => {
   it('takes never-checked videos before ones already seen', async () => {
-    db.runRaw(`UPDATE videos SET last_checked_at = CURRENT_TIMESTAMP WHERE id = 'corolla0001'`);
+    db.runRaw(`UPDATE videos SET last_checked_at = CURRENT_TIMESTAMP,
+      last_attempted_at = CURRENT_TIMESTAMP WHERE id = 'corolla0001'`);
 
     const due = await repository.videosDueForCheck(50);
     expect(due[0]?.id).not.toBe('corolla0001');

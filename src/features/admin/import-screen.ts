@@ -43,6 +43,8 @@ const FIELD_LABELS: Readonly<Record<ImportField, string>> = {
   duration: 'אורך',
   addedAt: 'תאריך הוספה',
   isHebrew: 'בעברית',
+  netfreeOpen: 'פתוח בנטפרי',
+  channelSourceId: 'מזהה ערוץ בחבילה',
 };
 
 /** How many rows the preview table shows. */

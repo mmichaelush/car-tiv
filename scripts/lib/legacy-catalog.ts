@@ -36,6 +36,8 @@ export interface LegacyVideo {
   readonly title?: unknown;
   readonly content?: unknown;
   readonly channel?: unknown;
+  readonly channelId?: unknown;
+  readonly netfreeOpen?: unknown;
   readonly channelImage?: unknown;
   readonly duration?: unknown;
   readonly dateAdded?: unknown;
@@ -84,6 +86,7 @@ export interface BuildOptions {
 // ---------------------------------------------------------------------------
 
 export interface NormalizedChannel {
+  readonly sourceId: string | null;
   readonly slug: string;
   readonly name: string;
   imageUrl: string | null;
@@ -97,6 +100,7 @@ export interface NormalizedTag {
 }
 
 export interface NormalizedVideo {
+  readonly netfreeOpen: boolean | null;
   readonly id: string;
   readonly title: string;
   readonly description: string;
@@ -306,6 +310,7 @@ export function buildCatalog(
 
       seenIds.add(id);
       videos.push({
+        netfreeOpen: readBoolean(raw.netfreeOpen),
         id,
         title,
         description,
@@ -392,10 +397,11 @@ function mergeSplitChannels(
 
   const replaces = new Map<string, string>();
   for (const channel of channels.values()) {
+    if (channel.sourceId != null) continue;
     if (channel.name.includes('|')) continue;
 
     const keeper = keepers.get(identity(channel.name));
-    if (keeper == null || keeper.slug === channel.slug) continue;
+    if (keeper == null || keeper.sourceId != null || keeper.slug === channel.slug) continue;
 
     replaces.set(channel.slug, keeper.slug);
     keeper.videoCount += channel.videoCount;
@@ -442,7 +448,8 @@ function upsertChannel(
   const name = readString(raw.channel);
   if (name.length === 0) return null;
 
-  const slug = slugifyWithFallback(name, `channel-${String(channels.size + 1)}`);
+  const sourceId = readString(raw.channelId) || null;
+  const slug = sourceId ?? slugifyWithFallback(name, `channel-${String(channels.size + 1)}`);
   const image = readString(raw.channelImage);
   const existing = channels.get(slug);
 
@@ -453,6 +460,7 @@ function upsertChannel(
   }
 
   const created: NormalizedChannel = {
+    sourceId,
     slug,
     name,
     imageUrl: image.length > 0 ? image : null,
@@ -475,6 +483,7 @@ function collectTags(
   context: { channelSlug: string | null; channelName: string; categoryId: string },
 ): string[] {
   const channelTokens = new Set<string>();
+  channelTokens.add(slugify(context.channelName));
   if (context.channelSlug != null) channelTokens.add(context.channelSlug);
   // Channel names are often written as "English | עברית"; either half alone is
   // also used as a tag.

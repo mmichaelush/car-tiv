@@ -22,6 +22,38 @@ const options = {
   fallbackDate: '2026-01-01',
 };
 
+it('keeps explicit channel identities separate and preserves false metadata', () => {
+  const result = buildCatalog(
+    [
+      file([
+        row({
+          id: 'abcdefghijk',
+          channelId: 'channel_001',
+          channel: 'Same',
+          netfreeOpen: false,
+          hebrewContent: false,
+        }),
+        row({
+          id: 'abcdefghijl',
+          channelId: 'channel_002',
+          channel: 'Same',
+          netfreeOpen: true,
+          hebrewContent: true,
+        }),
+        row({ id: 'abcdefghijm', channelId: 'channel_001', channel: 'Renamed' }),
+      ]),
+    ],
+    options,
+  );
+  expect(result.channels).toHaveLength(2);
+  expect(result.videos[0]).toMatchObject({
+    channelSlug: 'channel_001',
+    netfreeOpen: false,
+    isHebrew: false,
+  });
+  expect(result.videos[2]?.channelSlug).toBe('channel_001');
+});
+
 const row = (overrides: Partial<LegacyVideo> = {}): LegacyVideo => ({
   id: 'dQw4w9WgXcQ',
   title: 'החלפת שמן בטויוטה קורולה 2015',
