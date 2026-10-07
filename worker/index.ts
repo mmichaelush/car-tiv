@@ -215,7 +215,9 @@ async function servePage(request: Request, env: Env, url: URL): Promise<Response
     // to load anything.
     if (route.page === '/video/index.html' && !isVideoId(match[1] ?? '')) break;
 
-    const assetUrl = new URL(route.page, url.origin);
+    // Static Assets redirects index.html to its directory URL. Request that
+    // canonical asset internally so its redirect cannot strip the public id.
+    const assetUrl = new URL(route.page.replace(/index\.html$/, ''), url.origin);
     return env.ASSETS.fetch(new Request(assetUrl, request));
   }
 

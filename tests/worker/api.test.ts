@@ -356,6 +356,26 @@ describe('POST /api/contact', () => {
 });
 
 describe('pages and redirects', () => {
+  it.each(['/video/corolla0001', '/category/maintenance', '/channel/example'])(
+    'keeps the public identifier when serving %s',
+    async (path) => {
+      const canonicalAssets = createTestWorker(db, {
+        ASSETS: {
+          fetch: (request: Request) => {
+            const url = new URL(request.url);
+            if (url.pathname.endsWith('/index.html')) {
+              return Promise.resolve(Response.redirect(new URL('./', url).href, 307));
+            }
+            return Promise.resolve(new Response('<html>page</html>'));
+          },
+        } as unknown as Fetcher,
+      });
+      const response = await canonicalAssets.fetch(path);
+      expect(response.status).toBe(200);
+      expect(response.headers.has('location')).toBe(false);
+    },
+  );
+
   it('redirects a legacy ?v= link to /video/:id', async () => {
     const response = await api.fetch('/?v=corolla0001');
     expect(response.status).toBe(301);
@@ -374,12 +394,12 @@ describe('pages and redirects', () => {
 
   it('rewrites /video/:id to the video page shell', async () => {
     await api.fetch('/video/corolla0001');
-    expect(api.assetRequests).toContain('/video/index.html');
+    expect(api.assetRequests).toContain('/video/');
   });
 
   it('does not rewrite a malformed video id', async () => {
     await api.fetch('/video/not-an-id');
-    expect(api.assetRequests).not.toContain('/video/index.html');
+    expect(api.assetRequests).not.toContain('/video/');
   });
 
   it('adds security headers to a page response', async () => {
